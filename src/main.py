@@ -16,6 +16,7 @@ import click
 
 from pipeline import ExperimentPipeline
 from utils.loaders import load_config, load_dataset, load_method, load_metric
+from utils.visualizers import visualize_registration
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +152,45 @@ def inference(config_path: Path, index: str, save_transform: bool) -> None:
     config = load_config(config_path)
     pipeline = build_pipeline(config)
     pipeline.inference(idx=_parse_indices(index), save_transform=save_transform)
+
+
+@cli.command()
+@click.option(
+    "--config-path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option(
+    "--index",
+    type=int,
+    required=True,
+    help="Single sample index to run inference on and visualize.",
+)
+def visualize_single(config_path: Path, index: int) -> None:
+    """Run inference on a single sample and visualize the registration result.
+
+    The resulting transform is not saved to disk; it is only used to
+    render the before/after registration via Open3D.
+
+    Parameters
+    ----------
+    config_path : Path
+        Path to the YAML configuration file describing the run.
+    index : int
+        Index of the dataset sample to visualize.
+    """
+    config = load_config(config_path)
+    pipeline = build_pipeline(config)
+
+    transform = pipeline.inference(idx=index, save_transform=False)
+    sample = pipeline.dataset[index]
+
+    visualize_registration(
+        sample["source"],
+        sample["target"],
+        sample["ground_truth"].to_array(),
+        transform.to_array(),
+    )
 
 
 if __name__ == "__main__":
