@@ -21,6 +21,7 @@ from torch.utils.data import Dataset
 
 from metrics import Metric
 from registration import RegistrationMethod, Transform
+from utils.helpers import compute_overlap_ratio
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,15 @@ class ExperimentPipeline:
         results: dict[str, float] = {}
         for metric in self.metrics:
             results.update(metric.compute(**inputs))
+
+        # Overlap is a property of the ground-truth alignment, not the
+        # registration method, so it is computed once per sample here.
+        results["overlap_ratio"] = compute_overlap_ratio(
+            source=sample["source"],
+            target=sample["target"],
+            transformation=sample["ground_truth"].to_array(),
+            threshold=self.config["overlap_threshold"],
+        )
         return results
 
     def inference(

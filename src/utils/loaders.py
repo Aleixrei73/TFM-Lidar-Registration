@@ -30,6 +30,7 @@ _DATASETS: dict[str, type[Dataset]] = {}
 _REQUIRED_TOP_LEVEL_KEYS = (
     "output_path",
     "transforms_path",
+    "overlap_threshold",
     "registration_method",
     "dataset",
     "metrics",

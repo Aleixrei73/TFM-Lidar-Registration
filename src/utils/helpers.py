@@ -1,12 +1,13 @@
 import numpy as np
+from scipy.spatial import cKDTree
 
-def x_to_world(pose):
-    """
-    The transformation matrix from x-coordinate system to carla world system
+
+def x_to_world(pose: list[float]) -> np.ndarray:
+    """Compute the transformation matrix from x-coordinate system to carla world system.
 
     Parameters
     ----------
-    pose : list
+    pose : list[float]
         [x, y, z, roll, yaw, pitch]
 
     Returns
@@ -44,22 +45,20 @@ def x_to_world(pose):
     return matrix
 
 
-def x1_to_x2(x1, x2):
-    """
-    Transformation matrix from x1 to x2.
+def x1_to_x2(x1: list[float], x2: list[float]) -> np.ndarray:
+    """Compute the transformation matrix from x1 to x2.
 
     Parameters
     ----------
-    x1 : list
+    x1 : list[float]
         The pose of x1 under world coordinates.
-    x2 : list
+    x2 : list[float]
         The pose of x2 under world coordinates.
 
     Returns
     -------
     transformation_matrix : np.ndarray
         The transformation matrix.
-
     """
     x1_to_world = x_to_world(x1)
     x2_to_world = x_to_world(x2)
@@ -67,3 +66,59 @@ def x1_to_x2(x1, x2):
 
     transformation_matrix = np.dot(world_to_x2, x1_to_world)
     return transformation_matrix
+
+
+def compute_overlap_ratio(
+    source: np.ndarray,
+    target: np.ndarray,
+    transformation: np.ndarray,
+    threshold: float,
+) -> float:
+    """Compute the one-sided overlap ratio between a source and target point cloud.
+
+    The source point cloud is aligned to the target frame using the
+    ground-truth transformation, then each aligned point is matched against
+    its nearest neighbor in the target cloud. The ratio is one-sided: it
+    measures how much of `source` is covered by `target`, not the reverse.
+
+    Parameters
+    ----------
+    source : np.ndarray
+        Source point cloud, shape (N, 3).
+    target : np.ndarray
+        Target point cloud, shape (M, 3).
+    transformation : np.ndarray
+        Ground-truth 4x4 homogeneous transform mapping `source` into the
+        `target` frame.
+    threshold : float
+        Maximum nearest-neighbor distance for a source point to be
+        considered overlapping. Must be > 0 and dataset-scale dependent,
+        so no default is provided.
+
+    Returns
+    -------
+    float
+        Fraction of source points with a target neighbor within
+        `threshold`, in [0, 1].
+    """
+    if source.shape[0] == 0 or target.shape[0] == 0:
+        raise ValueError("source and target point clouds must be non-empty.")
+    if source.ndim != 2 or source.shape[1] != 3:
+        raise ValueError(f"source must have shape (N, 3), got {source.shape}.")
+    if target.ndim != 2 or target.shape[1] != 3:
+        raise ValueError(f"target must have shape (N, 3), got {target.shape}.")
+    if transformation.shape != (4, 4):
+        raise ValueError(
+            f"transformation must have shape (4, 4), got {transformation.shape}."
+        )
+    if threshold <= 0:
+        raise ValueError(f"threshold must be > 0, got {threshold}.")
+
+    # homogeneous coords so the 4x4 transform can be applied in one matmul
+    source_homogeneous = np.hstack([source, np.ones((source.shape[0], 1))])
+    source_aligned = (transformation @ source_homogeneous.T).T[:, :3]
+
+    target_tree = cKDTree(target)
+    distances, _ = target_tree.query(source_aligned)
+
+    return float(np.mean(distances <= threshold))

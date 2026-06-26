@@ -1,5 +1,6 @@
 output_path: experiments/icp_kitti
 transforms_path: transforms/icp_kitti
+overlap_threshold: 1.0
 
 registration_method:
   name: icp
