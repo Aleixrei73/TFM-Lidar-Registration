@@ -6,9 +6,10 @@ registration_method:
   params: {}          # forwarded as **kwargs to load_method
 
 dataset:
-  name: kitti
-  params: {}           # forwarded as **kwargs to load_dataset
-
+  name: V2X-Real
+  params:            # forwarded as **kwargs to load_dataset
+    root_dir : /mnt/work/datasets/V2X-Real/V2X-Real-Lidar-64/train
+    
 metrics:
   - name: rmse
     params: {}
