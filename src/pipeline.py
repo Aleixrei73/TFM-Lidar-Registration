@@ -159,7 +159,8 @@ class ExperimentPipeline:
         }
         aggregate = self._aggregate(per_sample)
 
-        self.output_path.mkdir(parents=True, exist_ok=True)
+        #Since the path is sanitized and created on instantiation, this is not needed
+        #self.output_path.mkdir(parents=True, exist_ok=True)
 
         results = {
             "timestamp": datetime.now(timezone.utc).isoformat(),

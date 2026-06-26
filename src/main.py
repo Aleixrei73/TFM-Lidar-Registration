@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import click
 import yaml
@@ -60,25 +60,22 @@ def _prepare_output_dir(config: dict[str, Any]) -> None:
     logger.info("Created output directory %s", candidate)
 
 
-def build_pipeline(config_path: Path) -> ExperimentPipeline:
-    """Load a config file and instantiate the experiment pipeline it describes.
+def build_pipeline(config: dict[str, Any]) -> ExperimentPipeline:
+    """Instantiate the experiment pipeline described by a config.
 
     Shared by every CLI command, since they all need the same method,
     dataset, and metrics setup before running a different operation.
 
     Parameters
     ----------
-    config_path : Path
-        Path to the YAML configuration file.
+    config : dict[str, Any]
+        Parsed run configuration.
 
     Returns
     -------
     ExperimentPipeline
         The pipeline built from the configuration.
     """
-    config = _load_config(config_path)
-    _prepare_output_dir(config)
-
     method_cfg = config["registration_method"]
     method = load_method(method_cfg["name"], **method_cfg.get("params", {}))
 
@@ -93,14 +90,45 @@ def build_pipeline(config_path: Path) -> ExperimentPipeline:
     return ExperimentPipeline(method, dataset, metrics, config)
 
 
+def _parse_indices(values: tuple[str, ...]) -> int | list[int] | Literal["all"]:
+    """Convert CLI `--index` values into the form `ExperimentPipeline.inference` expects.
+
+    Parameters
+    ----------
+    values : tuple[str, ...]
+        Raw `--index` option values. Each is either an integer or the
+        literal "all".
+
+    Returns
+    -------
+    int | list[int] | Literal["all"]
+        "all" if no indices or "all" was given, a single int if exactly
+        one index was given, or a list of ints otherwise.
+
+    Raises
+    ------
+    click.BadParameter
+        If "all" is combined with explicit indices.
+    """
+    if "all" in values:
+        if len(values) > 1:
+            raise click.BadParameter("'all' cannot be combined with explicit indices.")
+        return "all"
+
+    indices = [int(value) for value in values]
+    return indices[0] if len(indices) == 1 else indices
+
+
 @click.group()
 def cli() -> None:
     """Evaluate point cloud registration methods on lidar datasets."""
 
 
 @cli.command()
-@click.argument(
-    "config_path", type=click.Path(exists=True, dir_okay=False, path_type=Path)
+@click.option(
+    "--config-path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
 )
 def evaluate(config_path: Path) -> None:
     """Run a full evaluation of a registration method against a dataset.
@@ -110,8 +138,46 @@ def evaluate(config_path: Path) -> None:
     config_path : Path
         Path to the YAML configuration file describing the run.
     """
-    pipeline = build_pipeline(config_path)
+    config = _load_config(config_path)
+    _prepare_output_dir(config)
+    pipeline = build_pipeline(config)
     pipeline.evaluate()
+
+
+@cli.command()
+@click.option(
+    "--config-path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option(
+    "--index",
+    "indices",
+    multiple=True,
+    default=("all",),
+    help="Sample index to run inference on. May be repeated; defaults to 'all'.",
+)
+@click.option(
+    "--save-transform",
+    is_flag=True,
+    default=False,
+    help="Save the resulting transform(s) to config['transforms_path'].",
+)
+def inference(config_path: Path, indices: tuple[str, ...], save_transform: bool) -> None:
+    """Run registration on the requested samples without computing metrics.
+
+    Parameters
+    ----------
+    config_path : Path
+        Path to the YAML configuration file describing the run.
+    indices : tuple[str, ...]
+        Raw `--index` values, parsed via `_parse_indices`.
+    save_transform : bool
+        Whether to persist the resulting transform(s) to disk.
+    """
+    config = _load_config(config_path)
+    pipeline = build_pipeline(config)
+    pipeline.inference(idx=_parse_indices(indices), save_transform=save_transform)
 
 
 if __name__ == "__main__":
