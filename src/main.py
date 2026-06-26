@@ -186,10 +186,10 @@ def visualize_single(config_path: Path, index: int) -> None:
     sample = pipeline.dataset[index]
 
     visualize_registration(
-        sample["source"],
-        sample["target"],
-        sample["ground_truth"].to_array(),
-        transform.to_array(),
+        sample["infra_pts"].numpy(),
+        sample["vehicle_pts"].numpy(),
+        sample["T_infra_to_vehicle"].numpy(),
+        transform,
     )
 
 

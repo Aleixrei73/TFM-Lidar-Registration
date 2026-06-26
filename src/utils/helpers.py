@@ -68,6 +68,26 @@ def x1_to_x2(x1: list[float], x2: list[float]) -> np.ndarray:
     return transformation_matrix
 
 
+def apply_transform(points: np.ndarray, transform: np.ndarray) -> np.ndarray:
+    """Apply a 4x4 homogeneous transform to a point cloud.
+
+    Parameters
+    ----------
+    points : np.ndarray
+        Point cloud, shape (N, 3).
+    transform : np.ndarray
+        4x4 homogeneous transform.
+
+    Returns
+    -------
+    np.ndarray
+        The transformed point cloud, shape (N, 3).
+    """
+    # homogeneous coords so the 4x4 transform can be applied in one matmul
+    points_homogeneous = np.hstack([points, np.ones((points.shape[0], 1))])
+    return (transform @ points_homogeneous.T).T[:, :3]
+
+
 def compute_overlap_ratio(
     source: np.ndarray,
     target: np.ndarray,
@@ -114,9 +134,7 @@ def compute_overlap_ratio(
     if threshold <= 0:
         raise ValueError(f"threshold must be > 0, got {threshold}.")
 
-    # homogeneous coords so the 4x4 transform can be applied in one matmul
-    source_homogeneous = np.hstack([source, np.ones((source.shape[0], 1))])
-    source_aligned = (transformation @ source_homogeneous.T).T[:, :3]
+    source_aligned = apply_transform(source, transformation)
 
     target_tree = cKDTree(target)
     distances, _ = target_tree.query(source_aligned)

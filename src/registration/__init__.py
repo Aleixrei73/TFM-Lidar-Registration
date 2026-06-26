@@ -1,1 +1,1 @@
-from .base import Transform, RegistrationMethod
+from .base import RegistrationMethod

@@ -20,7 +20,7 @@ import yaml
 from torch.utils.data import Dataset
 
 from metrics import Metric
-from registration import RegistrationMethod, Transform
+from registration import RegistrationMethod
 from utils.helpers import compute_overlap_ratio
 
 logger = logging.getLogger(__name__)
@@ -30,10 +30,10 @@ class ExperimentPipeline:
     """Evaluates a registration method against a dataset using a set of
     metrics, and persists the resulting metrics and configuration to disk.
 
-    Each dataset item is expected to be a dict with keys `"source"` and
-    `"target"` (point clouds passed to the registration method) and
-    `"ground_truth"` (the :class:`~registration.base.Transform` that
-    aligns `source` onto `target`).
+    Each dataset item is expected to follow the `V2XReal` schema: keys
+    `"infra_pts"` and `"vehicle_pts"` (point clouds, as `torch.Tensor`)
+    and `"T_infra_to_vehicle"` (a 4x4 `torch.Tensor` homogeneous transform
+    that aligns `infra_pts` onto `vehicle_pts`).
     """
 
     def __init__(
@@ -51,7 +51,8 @@ class ExperimentPipeline:
             Registration method to evaluate.
         dataset : Dataset
             Dataset of point cloud pairs. Each item must be a dict with
-            keys `"source"`, `"target"`, and `"ground_truth"`.
+            keys `"infra_pts"`, `"vehicle_pts"`, and
+            `"T_infra_to_vehicle"`.
         metrics : list[Metric]
             Metrics to compute for each registered sample.
         config : dict[str, Any]
@@ -79,16 +80,18 @@ class ExperimentPipeline:
             all metrics in `self.metrics`.
         """
         sample = self.dataset[idx]
-        registered_cloud, transform = self.method.register(
-            sample["source"], sample["target"]
-        )
+        infra_pts = sample["infra_pts"].numpy()
+        vehicle_pts = sample["vehicle_pts"].numpy()
+        transform_gt = sample["T_infra_to_vehicle"].numpy()
+
+        registered_cloud, transform = self.method.register(infra_pts, vehicle_pts)
 
         inputs = {
-            "source": sample["source"],
+            "infra_pts": infra_pts,
             "registered_cloud": registered_cloud,
-            "target": sample["target"],
-            "transform": transform,
-            "ground_truth": sample["ground_truth"],
+            "vehicle_pts": vehicle_pts,
+            "transform_pred": transform,
+            "transform_gt": transform_gt,
         }
 
         results: dict[str, float] = {}
@@ -98,9 +101,9 @@ class ExperimentPipeline:
         # Overlap is a property of the ground-truth alignment, not the
         # registration method, so it is computed once per sample here.
         results["overlap_ratio"] = compute_overlap_ratio(
-            source=sample["source"],
-            target=sample["target"],
-            transformation=sample["ground_truth"].to_array(),
+            source=infra_pts,
+            target=vehicle_pts,
+            transformation=transform_gt,
             threshold=self.config["overlap_threshold"],
         )
         return results
@@ -109,7 +112,7 @@ class ExperimentPipeline:
         self,
         idx: int | list[int] | Literal["all"] = "all",
         save_transform: bool = False,
-    ) -> Transform | list[Transform]:
+    ) -> np.ndarray | list[np.ndarray]:
         """Run registration on the requested samples without computing metrics.
 
         Parameters
@@ -118,18 +121,18 @@ class ExperimentPipeline:
             A single sample index, a list of indices, or "all" for the
             whole dataset. Indices are processed in order.
         save_transform : bool
-            If True, stack all resulting transforms into a single 3D
-            array (via `Transform.to_array`) and save it with `np.save`
-            to `self.config["transforms_path"]`, overwriting any
-            existing file.
+            If True, stack all resulting 4x4 transforms into a single 3D
+            array and save it with `np.save` to
+            `self.config["transforms_path"]`, overwriting any existing
+            file.
 
         Returns
         -------
-        Transform | list[Transform]
-            The estimated transform for each requested sample, in the
-            same order as `idx`. A single `Transform` is returned when
-            `idx` is a single int; a list is returned for "all" or a
-            list of indices.
+        np.ndarray | list[np.ndarray]
+            The estimated 4x4 transform for each requested sample, in the
+            same order as `idx`. A single transform is returned when `idx`
+            is a single int; a list is returned for "all" or a list of
+            indices.
         """
         single = isinstance(idx, int)
         if idx == "all":
@@ -142,11 +145,13 @@ class ExperimentPipeline:
         transforms = []
         for index in indices:
             sample = self.dataset[index]
-            _, transform = self.method.register(sample["source"], sample["target"])
+            infra_pts = sample["infra_pts"].numpy()
+            vehicle_pts = sample["vehicle_pts"].numpy()
+            _, transform = self.method.register(infra_pts, vehicle_pts)
             transforms.append(transform)
 
         if save_transform:
-            matrices = np.stack([t.to_array() for t in transforms])
+            matrices = np.stack(transforms)
             transforms_path = Path(self.config["transforms_path"])
             transforms_path.parent.mkdir(parents=True, exist_ok=True)
             np.save(transforms_path, matrices)

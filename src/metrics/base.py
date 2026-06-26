@@ -26,7 +26,7 @@ class Metric(ABC):
         ----------
         **inputs : Any
             Subclass-specific named inputs required to compute the metric
-            (e.g. `source`, `target`, `transform`, `ground_truth`).
+            (e.g. `source`, `target`, `transform_pred`, `transform_gt`).
 
         Returns
         -------
