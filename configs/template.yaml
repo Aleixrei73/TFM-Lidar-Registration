@@ -1,4 +1,5 @@
 output_path: experiments/icp_kitti
+transforms_path: transforms/icp_kitti
 
 registration_method:
   name: icp

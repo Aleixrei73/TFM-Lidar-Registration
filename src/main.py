@@ -13,29 +13,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 import click
-import yaml
 
 from pipeline import ExperimentPipeline
-from utils.loaders import load_dataset, load_method, load_metric
+from utils.loaders import load_config, load_dataset, load_method, load_metric
 
 logger = logging.getLogger(__name__)
-
-
-def _load_config(config_path: Path) -> dict[str, Any]:
-    """Read and parse a YAML configuration file.
-
-    Parameters
-    ----------
-    config_path : Path
-        Path to the YAML configuration file.
-
-    Returns
-    -------
-    dict[str, Any]
-        The parsed configuration.
-    """
-    with config_path.open() as f:
-        return yaml.safe_load(f)
 
 
 def _prepare_output_dir(config: dict[str, Any]) -> None:
@@ -77,45 +59,38 @@ def build_pipeline(config: dict[str, Any]) -> ExperimentPipeline:
         The pipeline built from the configuration.
     """
     method_cfg = config["registration_method"]
-    method = load_method(method_cfg["name"], **method_cfg.get("params", {}))
+    method = load_method(method_cfg["name"], **method_cfg["params"])
 
     dataset_cfg = config["dataset"]
-    dataset = load_dataset(dataset_cfg["name"], **dataset_cfg.get("params", {}))
+    dataset = load_dataset(dataset_cfg["name"], **dataset_cfg["params"])
 
     metrics = [
-        load_metric(metric_cfg["name"], **metric_cfg.get("params", {}))
+        load_metric(metric_cfg["name"], **metric_cfg["params"])
         for metric_cfg in config["metrics"]
     ]
 
     return ExperimentPipeline(method, dataset, metrics, config)
 
 
-def _parse_indices(values: tuple[str, ...]) -> int | list[int] | Literal["all"]:
-    """Convert CLI `--index` values into the form `ExperimentPipeline.inference` expects.
+def _parse_indices(value: str) -> int | list[int] | Literal["all"]:
+    """Convert the raw `--index` value into the form `ExperimentPipeline.inference` expects.
 
     Parameters
     ----------
-    values : tuple[str, ...]
-        Raw `--index` option values. Each is either an integer or the
-        literal "all".
+    value : str
+        Raw `--index` option value: either the literal "all" or a
+        comma-separated list of integers (e.g. "0,1,2").
 
     Returns
     -------
     int | list[int] | Literal["all"]
-        "all" if no indices or "all" was given, a single int if exactly
-        one index was given, or a list of ints otherwise.
-
-    Raises
-    ------
-    click.BadParameter
-        If "all" is combined with explicit indices.
+        "all" if `value` is "all", a single int if exactly one index was
+        given, or a list of ints otherwise.
     """
-    if "all" in values:
-        if len(values) > 1:
-            raise click.BadParameter("'all' cannot be combined with explicit indices.")
+    if value == "all":
         return "all"
 
-    indices = [int(value) for value in values]
+    indices = [int(item) for item in value.split(",")]
     return indices[0] if len(indices) == 1 else indices
 
 
@@ -138,7 +113,7 @@ def evaluate(config_path: Path) -> None:
     config_path : Path
         Path to the YAML configuration file describing the run.
     """
-    config = _load_config(config_path)
+    config = load_config(config_path)
     _prepare_output_dir(config)
     pipeline = build_pipeline(config)
     pipeline.evaluate()
@@ -152,10 +127,8 @@ def evaluate(config_path: Path) -> None:
 )
 @click.option(
     "--index",
-    "indices",
-    multiple=True,
-    default=("all",),
-    help="Sample index to run inference on. May be repeated; defaults to 'all'.",
+    default="all",
+    help="Comma-separated sample indices to run inference on (e.g. '0,1,2'), or 'all'.",
 )
 @click.option(
     "--save-transform",
@@ -163,21 +136,21 @@ def evaluate(config_path: Path) -> None:
     default=False,
     help="Save the resulting transform(s) to config['transforms_path'].",
 )
-def inference(config_path: Path, indices: tuple[str, ...], save_transform: bool) -> None:
+def inference(config_path: Path, index: str, save_transform: bool) -> None:
     """Run registration on the requested samples without computing metrics.
 
     Parameters
     ----------
     config_path : Path
         Path to the YAML configuration file describing the run.
-    indices : tuple[str, ...]
-        Raw `--index` values, parsed via `_parse_indices`.
+    index : str
+        Raw `--index` value, parsed via `_parse_indices`.
     save_transform : bool
         Whether to persist the resulting transform(s) to disk.
     """
-    config = _load_config(config_path)
+    config = load_config(config_path)
     pipeline = build_pipeline(config)
-    pipeline.inference(idx=_parse_indices(indices), save_transform=save_transform)
+    pipeline.inference(idx=_parse_indices(index), save_transform=save_transform)
 
 
 if __name__ == "__main__":
