@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tfm-lidar-registration"
+version = "0.1.0"
+description = "Evaluator of multiple registration algorithms for point cloud datasets in Autonomous Driving"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "torch",
+    "torchvision",
+    "matplotlib",
+    "seaborn",
+    "scipy",
+    "open3d",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["datasets", "metrics", "registration", "utils"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
