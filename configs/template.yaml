@@ -1,0 +1,15 @@
+output_path: experiments/icp_kitti
+
+registration_method:
+  name: icp
+  params: {}          # forwarded as **kwargs to load_method
+
+dataset:
+  name: kitti
+  params: {}           # forwarded as **kwargs to load_dataset
+
+metrics:
+  - name: rmse
+    params: {}
+  - name: chamfer_distance
+    params: {}
