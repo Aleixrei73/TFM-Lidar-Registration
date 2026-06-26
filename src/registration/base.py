@@ -119,6 +119,19 @@ class Transform(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def to_array(self) -> np.ndarray:
+        """Return the transform's parameters as an ndarray.
+
+        Returns
+        -------
+        np.ndarray
+            Array representation of the transform (e.g. a 4x4 homogeneous
+            matrix for a rigid transform), suitable for stacking across
+            multiple transforms.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def save(self, path: Path) -> None:
         """Persist the transform's parameters to disk.
 
