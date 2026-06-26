@@ -69,9 +69,7 @@ def _load(registry: dict[str, type], name: str, kind: str, **kwargs: Any) -> Any
     """
     if name not in registry:
         available = sorted(registry)
-        raise ValueError(
-            f"Unknown {kind} '{name}'. Available {kind}s: {available}"
-        )
+        raise ValueError(f"Unknown {kind} '{name}'. Available {kind}s: {available}")
 
     cls = registry[name]
     logger.debug("Instantiating %s '%s' as %s", kind, name, cls.__name__)

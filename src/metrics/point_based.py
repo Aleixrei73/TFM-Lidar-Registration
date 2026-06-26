@@ -103,7 +103,7 @@ class PointBasedMetric(Metric):
         float
             RTE, computed as ``||t_gt - t_pred||_2``.
         """
-        
+
         translation_gt = transform_gt[:3, 3]
         translation_pred = transform_pred[:3, 3]
 
