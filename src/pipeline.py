@@ -199,7 +199,9 @@ class ExperimentPipeline:
             is_last = idx == num_samples - 1
             if is_last or (idx + 1) % checkpoint_every == 0:
                 self._write_results(
-                    results_path, per_sample, status="complete" if is_last else "running"
+                    results_path,
+                    per_sample,
+                    status="complete" if is_last else "running",
                 )
 
         logger.info("Saved evaluation results to %s", results_path)

@@ -13,6 +13,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,9 @@ def find_metrics_files(experiments_dir: Path) -> list[Path]:
     return found
 
 
-def aggregate_metrics(samples: list[dict[str, float]], metric_names: set[str]) -> dict[str, dict[str, float]]:
+def aggregate_metrics(
+    samples: list[dict[str, float]], metric_names: set[str]
+) -> dict[str, dict[str, float]]:
     """Compute the mean and standard deviation of each metric across samples.
 
     Mirrors `Pipeline._aggregate` (src/pipeline.py): unions metric names
@@ -73,7 +76,13 @@ def aggregate_metrics(samples: list[dict[str, float]], metric_names: set[str]) -
     return aggregate
 
 
-def build_row(algorithm: str, run_id: str, timestamp: str, n_samples: int, aggregate: dict[str, dict[str, float]]) -> dict[str, Any]:
+def build_row(
+    algorithm: str,
+    run_id: str,
+    timestamp: str,
+    n_samples: int,
+    aggregate: dict[str, dict[str, float]],
+) -> dict[str, Any]:
     """Flatten run identity and an aggregate dict into a single parquet row.
 
     Parameters
@@ -107,7 +116,49 @@ def build_row(algorithm: str, run_id: str, timestamp: str, n_samples: int, aggre
     return row
 
 
-def process_metrics_file(path: Path) -> tuple[dict[str, Any], dict[float, dict[str, Any]]] | None:
+def load_config_params(path: Path) -> dict[str, Any]:
+    """Extract registration method and metric parameters from a run's config.yaml.
+
+    Parameters
+    ----------
+    path : Path
+        Path to the run's `metrics.json`; its sibling `config.yaml` is read.
+
+    Returns
+    -------
+    dict[str, Any]
+        `registration_method.params` prefixed with `regmethod_`, and each
+        `metrics[].params` prefixed with `metric_{metric_name}_`. Empty if
+        `config.yaml` is missing or malformed.
+    """
+    config_path = path.parent / "config.yaml"
+    if not config_path.exists():
+        logger.warning("No config params for %s: config.yaml not found", path)
+        return {}
+
+    try:
+        with config_path.open() as f:
+            config = yaml.safe_load(f)
+        registration_method = config.get("registration_method", {})
+        metrics = config.get("metrics", [])
+    except (yaml.YAMLError, AttributeError) as exc:
+        logger.warning("No config params for %s: malformed config.yaml (%s)", path, exc)
+        return {}
+
+    params = {
+        f"regmethod_{key}": value
+        for key, value in registration_method.get("params", {}).items()
+    }
+    for metric in metrics:
+        name = metric.get("name")
+        for key, value in metric.get("params", {}).items():
+            params[f"metric_{name}_{key}"] = value
+    return params
+
+
+def process_metrics_file(
+    path: Path,
+) -> tuple[dict[str, Any], dict[float, dict[str, Any]]] | None:
     """Build the full-data row and per-threshold rows for one `metrics.json`.
 
     Parameters
@@ -134,15 +185,24 @@ def process_metrics_file(path: Path) -> tuple[dict[str, Any], dict[float, dict[s
         logger.warning("Skipping %s: malformed metrics.json (%s)", path, exc)
         return None
 
+    config_params = load_config_params(path)
+
     full_row = build_row(algorithm, run_id, timestamp, len(per_sample), aggregate)
+    full_row.update(config_params)
 
     metric_names = set(aggregate)
     samples = list(per_sample.values())
     threshold_rows = {}
     for threshold in OVERLAP_THRESHOLDS:
-        filtered = [s for s in samples if s.get("overlap_ratio", float("-inf")) >= threshold]
+        filtered = [
+            s for s in samples if s.get("overlap_ratio", float("-inf")) >= threshold
+        ]
         threshold_aggregate = aggregate_metrics(filtered, metric_names)
-        threshold_rows[threshold] = build_row(algorithm, run_id, timestamp, len(filtered), threshold_aggregate)
+        threshold_row = build_row(
+            algorithm, run_id, timestamp, len(filtered), threshold_aggregate
+        )
+        threshold_row.update(config_params)
+        threshold_rows[threshold] = threshold_row
 
     return full_row, threshold_rows
 
@@ -156,7 +216,9 @@ def main() -> None:
     logger.info("Found %d metrics.json files", len(metrics_files))
 
     full_rows = []
-    threshold_row_lists: dict[float, list[dict[str, Any]]] = {t: [] for t in OVERLAP_THRESHOLDS}
+    threshold_row_lists: dict[float, list[dict[str, Any]]] = {
+        t: [] for t in OVERLAP_THRESHOLDS
+    }
     skipped = 0
     for path in metrics_files:
         result = process_metrics_file(path)
@@ -168,9 +230,13 @@ def main() -> None:
         for threshold, row in threshold_rows.items():
             threshold_row_lists[threshold].append(row)
 
-    logger.info("Processed %d runs, skipped %d malformed files", len(full_rows), skipped)
+    logger.info(
+        "Processed %d runs, skipped %d malformed files", len(full_rows), skipped
+    )
 
-    pd.DataFrame(full_rows).to_parquet(experiments_dir / "summaries/summary.parquet", index=False)
+    pd.DataFrame(full_rows).to_parquet(
+        experiments_dir / "summaries/summary.parquet", index=False
+    )
     for threshold, rows in threshold_row_lists.items():
         out_path = experiments_dir / f"summaries/summary_overlap_{threshold}.parquet"
         pd.DataFrame(rows).to_parquet(out_path, index=False)

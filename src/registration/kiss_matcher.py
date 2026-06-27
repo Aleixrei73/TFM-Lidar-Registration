@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import numpy as np
 import kiss_matcher
+import numpy as np
 
 from .base import PointCloud, RegistrationMethod, Transform
+
 
 class KISSMatcher(RegistrationMethod):
     """Point cloud registration using the TEASER++ robust solver.
@@ -16,10 +17,7 @@ class KISSMatcher(RegistrationMethod):
     correspondences.
     """
 
-    def __init__(
-        self,
-        voxel_size: float = 0.5
-    ) -> None:
+    def __init__(self, voxel_size: float = 0.5) -> None:
         """Build the TEASER++ solver parameters.
 
         Parameters
@@ -54,7 +52,6 @@ class KISSMatcher(RegistrationMethod):
         """
         config = kiss_matcher.KISSMatcherConfig(voxel_size)
         self.matcher = kiss_matcher.KISSMatcher(config)
-
 
     def fit(self, source: PointCloud, target: PointCloud) -> Transform:
         """Estimate the transform that aligns `source` onto `target`.

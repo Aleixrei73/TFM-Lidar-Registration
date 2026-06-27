@@ -20,6 +20,8 @@ dependencies = [
     "tqdm",
     "pandas",
     "pyarrow",
+    "small_gicp",
+    "probreg",
     "kiss-matcher"
 ]
 
