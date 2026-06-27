@@ -18,13 +18,13 @@ from torch.utils.data import Dataset
 
 from datasets import V2XReal
 from metrics import Metric, PointBasedMetric
-from registration import RegistrationMethod, TeaserRegistration
+from registration import RegistrationMethod, KISSMatcher
 
 logger = logging.getLogger(__name__)
 
 # Empty until concrete subclasses are implemented; populate with
 # "name": ClassName entries as methods/metrics/datasets are added.
-_METHODS: dict[str, type[RegistrationMethod]] = {"teaser": TeaserRegistration}
+_METHODS: dict[str, type[RegistrationMethod]] = {"kiss_matcher": KISSMatcher}
 _METRICS: dict[str, type[Metric]] = {"point_based": PointBasedMetric}
 _DATASETS: dict[str, type[Dataset]] = {"v2x_real": V2XReal}
 

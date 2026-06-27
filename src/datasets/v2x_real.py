@@ -154,3 +154,6 @@ class V2XReal(Dataset):
                 "vehicle_agent": vehicle_dir.name,
             },
         }
+
+    def __len__(self):
+        return len(self.pairs)

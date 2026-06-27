@@ -2,7 +2,7 @@
 #SBATCH --job-name=evaluate
 #SBATCH --partition=gpi.compute
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=16G
+#SBATCH --mem=64G
 #SBATCH --output=experiments/logs/%x_%j.out
 #SBATCH --error=experiments/logs/%x_%j.err
 

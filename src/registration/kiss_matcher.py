@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import numpy as np
-import teaserpp_python
+import kiss_matcher
 
 from .base import PointCloud, RegistrationMethod, Transform
 
-
-class TeaserRegistration(RegistrationMethod):
+class KISSMatcher(RegistrationMethod):
     """Point cloud registration using the TEASER++ robust solver.
 
     TEASER++ recovers a (possibly scaled) rigid transform between two point
@@ -19,15 +18,7 @@ class TeaserRegistration(RegistrationMethod):
 
     def __init__(
         self,
-        cbar2: float = 1,
-        noise_bound: float = 0.01,
-        estimate_scaling: bool = True,
-        rotation_estimation_algorithm: teaserpp_python.RobustRegistrationSolver.ROTATION_ESTIMATION_ALGORITHM = (
-            teaserpp_python.RobustRegistrationSolver.ROTATION_ESTIMATION_ALGORITHM.GNC_TLS
-        ),
-        rotation_gnc_factor: float = 1.4,
-        rotation_max_iterations: int = 100,
-        rotation_cost_threshold: float = 1e-12,
+        resolution: float = 0.5
     ) -> None:
         """Build the TEASER++ solver parameters.
 
@@ -61,18 +52,8 @@ class TeaserRegistration(RegistrationMethod):
             early once the change in cost between iterations falls below
             this value.
         """
-        solver_params = teaserpp_python.RobustRegistrationSolver.Params()
+        self.matcher = kiss_matcher.KISSMatcher(resolution=resolution)
 
-        solver_params.cbar2 = cbar2
-        solver_params.noise_bound = noise_bound
-        solver_params.estimate_scaling = estimate_scaling
-        solver_params.rotation_estimation_algorithm = rotation_estimation_algorithm
-        solver_params.rotation_gnc_factor = rotation_gnc_factor
-        solver_params.rotation_max_iterations = rotation_max_iterations
-        solver_params.rotation_cost_threshold = rotation_cost_threshold
-
-        self.solver_params = solver_params
-        self.solver = teaserpp_python.RobustRegistrationSolver(solver_params)
 
     def fit(self, source: PointCloud, target: PointCloud) -> Transform:
         """Estimate the transform that aligns `source` onto `target`.
@@ -90,12 +71,11 @@ class TeaserRegistration(RegistrationMethod):
             The estimated 4x4 homogeneous transform mapping `source` onto
             `target`.
         """
-        # TEASER++ expects points as 3xN arrays, columns being individual points
-        self.solver.solve(source.T, target.T)
-        solution = self.solver.getSolution()
 
+        # TEASER++ expects points as 3xN arrays, columns being individual points
+        R, t = self.matcher.match(source, target)
         transform = np.eye(4)
-        transform[:3, :3] = solution.scale * solution.rotation
-        transform[:3, 3] = solution.translation.flatten()
+        transform[:3, :3] = R
+        transform[:3, 3] = t.flatten()
 
         return transform

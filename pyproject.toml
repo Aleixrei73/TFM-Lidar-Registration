@@ -17,7 +17,8 @@ dependencies = [
     "open3d",
     "pyyaml",
     "click",
-    "tqdm"
+    "tqdm",
+    "kiss-matcher"
 ]
 
 [project.optional-dependencies]

@@ -3,8 +3,8 @@ transforms_path: transforms/teaser
 overlap_threshold: 1.0
 
 registration_method:
-  name: teaser
-  params: {}          # forwarded as **kwargs to load_method
+  name: kiss
+  params: {resolution : 0.5}          # forwarded as **kwargs to load_method
 
 dataset:
   name: v2x_real
@@ -13,4 +13,7 @@ dataset:
     
 metrics:
   - name: point_based
-    params: {}
+    params: {
+      rte_threshold : 0.2,
+      rre_threshold : 0.2
+    }
