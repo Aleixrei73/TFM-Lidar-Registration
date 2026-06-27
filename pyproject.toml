@@ -18,6 +18,8 @@ dependencies = [
     "pyyaml",
     "click",
     "tqdm",
+    "pandas",
+    "pyarrow",
     "kiss-matcher"
 ]
 
