@@ -1,0 +1,16 @@
+dataset:
+  name: v2x_real
+  params:
+    root_dir: /mnt/work/datasets/V2X-Real/V2X-Real-Lidar-64/train
+metrics:
+- name: point_based
+  params:
+    rre_threshold: 0.2
+    rte_threshold: 0.2
+output_path: experiments/kiss_matcher/6c37bebd90424704ba4f765cb475f95f
+overlap_threshold: 1.0
+registration_method:
+  name: kiss_matcher
+  params:
+    voxel_size: 0.5
+transforms_path: transforms/kiss_matcher
