@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -58,7 +59,9 @@ class ExperimentPipeline:
             Metrics to compute for each registered sample.
         config : dict[str, Any]
             Run configuration. Must contain an `"output_path"` key, the
-            directory where results and the configuration are saved.
+            directory where results and the configuration are saved. May
+            contain a `"checkpoint_every"` key (default 10) controlling
+            how often `evaluate` checkpoints partial results to disk.
         """
         self.method = method
         self.dataset = dataset
@@ -167,31 +170,72 @@ class ExperimentPipeline:
         `metrics.json`, and the run configuration is saved to
         `config.yaml`, both inside `self.output_path`. Existing files at
         those paths are overwritten.
+
+        `metrics.json` is checkpointed to disk every
+        `self.config["checkpoint_every"]` samples (default 10), so an
+        interrupted run leaves behind a usable partial result with
+        `"status": "running"` instead of losing all progress. The final
+        write always happens regardless of the checkpoint interval, and
+        is marked `"status": "complete"`.
         """
         logger.info("Starting evaluation over %d samples", len(self.dataset))
-
-        per_sample = {}
-        for idx in tqdm(range(len(self.dataset)), desc="Evaluating samples"):
-            per_sample[str(idx)] = self.evaluate_single(idx)
-        aggregate = self._aggregate(per_sample)
+        checkpoint_every = self.config.get("checkpoint_every", 10)
 
         # Since the path is sanitized and created on instantiation, this is not needed
         # self.output_path.mkdir(parents=True, exist_ok=True)
 
-        results = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "per_sample": per_sample,
-            "aggregate": aggregate,
-        }
-        results_path = self.output_path / "metrics.json"
-        with results_path.open("w") as f:
-            json.dump(results, f, indent=2)
-
+        # Saved upfront, alongside the run, so it is available even if the
+        # evaluation loop below is interrupted partway through.
         config_path = self.output_path / "config.yaml"
         with config_path.open("w") as f:
             yaml.safe_dump(self.config, f)
 
+        results_path = self.output_path / "metrics.json"
+        per_sample = {}
+        num_samples = len(self.dataset)
+        for idx in tqdm(range(num_samples), desc="Evaluating samples"):
+            per_sample[str(idx)] = self.evaluate_single(idx)
+
+            is_last = idx == num_samples - 1
+            if is_last or (idx + 1) % checkpoint_every == 0:
+                self._write_results(
+                    results_path, per_sample, status="complete" if is_last else "running"
+                )
+
         logger.info("Saved evaluation results to %s", results_path)
+
+    @staticmethod
+    def _write_results(
+        results_path: Path,
+        per_sample: dict[str, dict[str, float]],
+        status: Literal["running", "complete"],
+    ) -> None:
+        """Atomically write per-sample and aggregate results to disk.
+
+        Writes to a temporary file in the same directory and then
+        replaces `results_path`, so a crash mid-write never leaves a
+        truncated or corrupt `metrics.json` behind.
+
+        Parameters
+        ----------
+        results_path : Path
+            Destination path for the results file.
+        per_sample : dict[str, dict[str, float]]
+            Metric values for every sample evaluated so far.
+        status : Literal["running", "complete"]
+            Whether this is a mid-run checkpoint or the final result.
+        """
+        results = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "status": status,
+            "per_sample": per_sample,
+            "aggregate": ExperimentPipeline._aggregate(per_sample),
+        }
+
+        tmp_path = results_path.with_suffix(".json.tmp")
+        with tmp_path.open("w") as f:
+            json.dump(results, f, indent=2)
+        os.replace(tmp_path, results_path)
 
     @staticmethod
     def _aggregate(

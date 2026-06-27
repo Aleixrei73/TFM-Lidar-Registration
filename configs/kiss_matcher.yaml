@@ -1,6 +1,7 @@
 output_path: experiments/kiss_matcher
 transforms_path: transforms/kiss_matcher
 overlap_threshold: 1.0
+checkpoint_every : 100
 
 registration_method:
   name: kiss_matcher
