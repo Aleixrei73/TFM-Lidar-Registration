@@ -16,16 +16,23 @@ from typing import Any
 import yaml
 from torch.utils.data import Dataset
 
-from metrics import Metric
+from datasets import V2XReal
+from metrics import Metric, PointBasedMetric
 from registration import RegistrationMethod
 
 logger = logging.getLogger(__name__)
 
 # Empty until concrete subclasses are implemented; populate with
 # "name": ClassName entries as methods/metrics/datasets are added.
-_METHODS: dict[str, type[RegistrationMethod]] = {}
-_METRICS: dict[str, type[Metric]] = {}
-_DATASETS: dict[str, type[Dataset]] = {}
+_METHODS: dict[str, type[RegistrationMethod]] = {
+    
+}
+_METRICS: dict[str, type[Metric]] = {
+    "point_based" : PointBasedMetric
+}
+_DATASETS: dict[str, type[Dataset]] = {
+    "v2x-real" : V2XReal
+}
 
 _REQUIRED_TOP_LEVEL_KEYS = (
     "output_path",

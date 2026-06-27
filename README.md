@@ -19,6 +19,8 @@ For running tests and linting, install the development extras instead:
 pip install -e ".[dev]"
 ```
 
+The teaser++ library also needs to be installed. To do so [this guide](https://teaser.readthedocs.io/en/latest/installation.html) can be used.
+
 ## Usage
 
 Experiments are driven by a YAML configuration file describing the
