@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 PointCloud = np.ndarray
 Transform = np.ndarray
 
+
 class RegistrationMethod(ABC):
     """Abstract base class for point cloud registration methods.
 

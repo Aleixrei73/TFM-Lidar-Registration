@@ -18,6 +18,7 @@ from typing import Any, Literal
 import numpy as np
 import yaml
 from torch.utils.data import Dataset
+from tqdm import tqdm
 
 from metrics import Metric
 from registration import RegistrationMethod
@@ -169,9 +170,9 @@ class ExperimentPipeline:
         """
         logger.info("Starting evaluation over %d samples", len(self.dataset))
 
-        per_sample = {
-            str(idx): self.evaluate_single(idx) for idx in range(len(self.dataset))
-        }
+        per_sample = {}
+        for idx in tqdm(range(len(self.dataset)), desc="Evaluating samples"):
+            per_sample[str(idx)] = self.evaluate_single(idx)
         aggregate = self._aggregate(per_sample)
 
         # Since the path is sanitized and created on instantiation, this is not needed

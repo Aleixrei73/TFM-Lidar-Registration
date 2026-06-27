@@ -1,0 +1,16 @@
+output_path: experiments/teaser
+transforms_path: transforms/teaser
+overlap_threshold: 1.0
+
+registration_method:
+  name: teaser
+  params: {}          # forwarded as **kwargs to load_method
+
+dataset:
+  name: v2x_real
+  params:            # forwarded as **kwargs to load_dataset
+    root_dir : /mnt/work/datasets/V2X-Real/V2X-Real-Lidar-64/train
+    
+metrics:
+  - name: point_based
+    params: {}

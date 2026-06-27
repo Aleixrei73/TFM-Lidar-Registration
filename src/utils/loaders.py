@@ -18,21 +18,15 @@ from torch.utils.data import Dataset
 
 from datasets import V2XReal
 from metrics import Metric, PointBasedMetric
-from registration import RegistrationMethod
+from registration import RegistrationMethod, TeaserRegistration
 
 logger = logging.getLogger(__name__)
 
 # Empty until concrete subclasses are implemented; populate with
 # "name": ClassName entries as methods/metrics/datasets are added.
-_METHODS: dict[str, type[RegistrationMethod]] = {
-    
-}
-_METRICS: dict[str, type[Metric]] = {
-    "point_based" : PointBasedMetric
-}
-_DATASETS: dict[str, type[Dataset]] = {
-    "v2x-real" : V2XReal
-}
+_METHODS: dict[str, type[RegistrationMethod]] = {"teaser": TeaserRegistration}
+_METRICS: dict[str, type[Metric]] = {"point_based": PointBasedMetric}
+_DATASETS: dict[str, type[Dataset]] = {"v2x_real": V2XReal}
 
 _REQUIRED_TOP_LEVEL_KEYS = (
     "output_path",

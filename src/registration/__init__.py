@@ -1,2 +1,2 @@
-from .base import RegistrationMethod, PointCloud, Transform
+from .base import PointCloud, RegistrationMethod, Transform
 from .teaser import TeaserRegistration

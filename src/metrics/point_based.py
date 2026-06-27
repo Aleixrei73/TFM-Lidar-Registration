@@ -12,8 +12,9 @@ from typing import Any
 
 import numpy as np
 
+from registration import Transform
+
 from .base import Metric
-from registration import PointCloud, Transform
 
 logger = logging.getLogger(__name__)
 

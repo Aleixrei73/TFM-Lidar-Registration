@@ -16,7 +16,8 @@ dependencies = [
     "scipy",
     "open3d",
     "pyyaml",
-    "click"
+    "click",
+    "tqdm"
 ]
 
 [project.optional-dependencies]
