@@ -134,8 +134,8 @@ class V2XReal(Dataset):
         infra_pts = read_point_cloud(infra_dir / f"{infra_ts}.bin")
         vehicle_pts = read_point_cloud(vehicle_dir / f"{vehicle_ts}.bin")
 
-        infra_pose = load_yaml(infra_dir / f"{infra_ts}.yaml")["lidar_pose"]
-        vehicle_pose = load_yaml(vehicle_dir / f"{vehicle_ts}.yaml")["lidar_pose"]
+        infra_pose = load_yaml(infra_dir / f"{infra_ts}.yaml")["true_ego_pose"]
+        vehicle_pose = load_yaml(vehicle_dir / f"{vehicle_ts}.yaml")["true_ego_pose"]
 
         # x1_to_x2 maps points from x1's local frame into x2's local frame
         T_vehicle_to_infra = x1_to_x2(vehicle_pose, infra_pose)

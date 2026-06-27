@@ -26,8 +26,9 @@ registration method, dataset, and metrics to use. See
 [configs/template.yaml](configs/template.yaml) for the expected format:
 
 ```yaml
-output_path: experiments/icp_kitti
-transforms_path: transforms/icp_kitti
+output_path: [Path to experiments folder]
+transforms_path: [Path to save transformations]
+overlap_threshold: 1.0
 
 registration_method:
   name: icp
@@ -35,7 +36,8 @@ registration_method:
 
 dataset:
   name: kitti
-  params: {}
+  params:
+    root_path: [Path to dataset]
 
 metrics:
   - name: rmse
