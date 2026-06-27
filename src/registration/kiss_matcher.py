@@ -18,7 +18,7 @@ class KISSMatcher(RegistrationMethod):
 
     def __init__(
         self,
-        resolution: float = 0.5
+        voxel_size: float = 0.5
     ) -> None:
         """Build the TEASER++ solver parameters.
 
@@ -52,7 +52,8 @@ class KISSMatcher(RegistrationMethod):
             early once the change in cost between iterations falls below
             this value.
         """
-        self.matcher = kiss_matcher.KISSMatcher(resolution=resolution)
+        config = kiss_matcher.KISSMatcherConfig(voxel_size)
+        self.matcher = kiss_matcher.KISSMatcher(config)
 
 
     def fit(self, source: PointCloud, target: PointCloud) -> Transform:
@@ -73,9 +74,10 @@ class KISSMatcher(RegistrationMethod):
         """
 
         # TEASER++ expects points as 3xN arrays, columns being individual points
-        R, t = self.matcher.match(source, target)
+        self.matcher.reset()
+        result = self.matcher.estimate(source, target)
         transform = np.eye(4)
-        transform[:3, :3] = R
-        transform[:3, 3] = t.flatten()
+        transform[:3, :3] = np.asarray(result.rotation)
+        transform[:3, 3] = np.asarray(result.translation).flatten()
 
         return transform

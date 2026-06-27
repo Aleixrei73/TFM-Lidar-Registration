@@ -1,10 +1,10 @@
-output_path: experiments/teaser
-transforms_path: transforms/teaser
+output_path: experiments/kiss_matcher
+transforms_path: transforms/kiss_matcher
 overlap_threshold: 1.0
 
 registration_method:
-  name: kiss
-  params: {resolution : 0.5}          # forwarded as **kwargs to load_method
+  name: kiss_matcher
+  params: {voxel_size : 0.5}          # forwarded as **kwargs to load_method
 
 dataset:
   name: v2x_real
