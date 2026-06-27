@@ -1,8 +1,9 @@
 import numpy as np
 from scipy.spatial import cKDTree
+from registration import PointCloud, Transform
 
 
-def x_to_world(pose: list[float]) -> np.ndarray:
+def x_to_world(pose: list[float]) -> Transform:
     """Compute the transformation matrix from x-coordinate system to carla world system.
 
     Parameters
@@ -45,7 +46,7 @@ def x_to_world(pose: list[float]) -> np.ndarray:
     return matrix
 
 
-def x1_to_x2(x1: list[float], x2: list[float]) -> np.ndarray:
+def x1_to_x2(x1: list[float], x2: list[float]) -> Transform:
     """Compute the transformation matrix from x1 to x2.
 
     Parameters
@@ -68,19 +69,19 @@ def x1_to_x2(x1: list[float], x2: list[float]) -> np.ndarray:
     return transformation_matrix
 
 
-def apply_transform(points: np.ndarray, transform: np.ndarray) -> np.ndarray:
+def apply_transform(points: PointCloud, transform: Transform) -> PointCloud:
     """Apply a 4x4 homogeneous transform to a point cloud.
 
     Parameters
     ----------
-    points : np.ndarray
+    points : PointCloud
         Point cloud, shape (N, 3).
-    transform : np.ndarray
+    transform : Transform
         4x4 homogeneous transform.
 
     Returns
     -------
-    np.ndarray
+    Transform
         The transformed point cloud, shape (N, 3).
     """
     # homogeneous coords so the 4x4 transform can be applied in one matmul
@@ -89,9 +90,9 @@ def apply_transform(points: np.ndarray, transform: np.ndarray) -> np.ndarray:
 
 
 def compute_overlap_ratio(
-    source: np.ndarray,
-    target: np.ndarray,
-    transformation: np.ndarray,
+    source: PointCloud,
+    target: PointCloud,
+    transformation: Transform,
     threshold: float,
 ) -> float:
     """Compute the one-sided overlap ratio between a source and target point cloud.
@@ -103,11 +104,11 @@ def compute_overlap_ratio(
 
     Parameters
     ----------
-    source : np.ndarray
+    source : PointCloud
         Source point cloud, shape (N, 3).
-    target : np.ndarray
+    target : PointCloud
         Target point cloud, shape (M, 3).
-    transformation : np.ndarray
+    transformation : Transform
         Ground-truth 4x4 homogeneous transform mapping `source` into the
         `target` frame.
     threshold : float

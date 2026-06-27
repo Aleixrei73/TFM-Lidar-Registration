@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from .base import Metric
+from registration import PointCloud, Transform
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class PointBasedMetric(Metric):
         }
 
     @staticmethod
-    def _compute_rre(transform_gt: np.ndarray, transform_pred: np.ndarray) -> float:
+    def _compute_rre(transform_gt: Transform, transform_pred: Transform) -> float:
         """Compute the Relative Rotation Error (RRE) between two transforms.
 
         Parameters
@@ -88,7 +89,7 @@ class PointBasedMetric(Metric):
         return rre
 
     @staticmethod
-    def _compute_rte(transform_gt: np.ndarray, transform_pred: np.ndarray) -> float:
+    def _compute_rte(transform_gt: Transform, transform_pred: Transform) -> float:
         """Compute the Relative Translation Error (RTE) between two transforms.
 
         Parameters

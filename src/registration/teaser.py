@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import teaserpp_python
 
-from .base import PointCloud, RegistrationMethod
+from .base import PointCloud, RegistrationMethod, Transform
 
 
 class TeaserRegistration(RegistrationMethod):
@@ -74,7 +74,7 @@ class TeaserRegistration(RegistrationMethod):
         self.solver_params = solver_params
         self.solver = teaserpp_python.RobustRegistrationSolver(solver_params)
 
-    def fit(self, source: PointCloud, target: PointCloud) -> np.ndarray:
+    def fit(self, source: PointCloud, target: PointCloud) -> Transform:
         """Estimate the transform that aligns `source` onto `target`.
 
         Parameters

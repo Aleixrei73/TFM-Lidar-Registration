@@ -17,7 +17,7 @@ from utils.helpers import apply_transform
 logger = logging.getLogger(__name__)
 
 PointCloud = np.ndarray
-
+Transform = np.ndarray
 
 class RegistrationMethod(ABC):
     """Abstract base class for point cloud registration methods.
@@ -50,7 +50,7 @@ class RegistrationMethod(ABC):
         return source, target
 
     @abstractmethod
-    def fit(self, source: PointCloud, target: PointCloud) -> np.ndarray:
+    def fit(self, source: PointCloud, target: PointCloud) -> Transform:
         """Estimate the transform that aligns `source` onto `target`.
 
         Parameters
@@ -62,7 +62,7 @@ class RegistrationMethod(ABC):
 
         Returns
         -------
-        np.ndarray
+        Transform
             The estimated 4x4 homogeneous transform mapping `source` onto
             `target`.
         """
@@ -70,7 +70,7 @@ class RegistrationMethod(ABC):
 
     def register(
         self, source: PointCloud, target: PointCloud
-    ) -> tuple[PointCloud, np.ndarray]:
+    ) -> tuple[PointCloud, Transform]:
         """Run the full registration pipeline: preprocess, fit, apply.
 
         Parameters
@@ -82,7 +82,7 @@ class RegistrationMethod(ABC):
 
         Returns
         -------
-        tuple[PointCloud, np.ndarray]
+        tuple[PointCloud, Transform]
             The registered `source` point cloud and the 4x4 transform used
             to produce it.
         """
