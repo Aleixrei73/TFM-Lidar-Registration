@@ -64,7 +64,7 @@ class VGICP(RegistrationMethod):
             The estimated 4x4 homogeneous transform mapping `source` onto
             `target`.
         """
-        transform_imu = kwargs.get("transform_imu", np.eye(4))
+        transform_imu = kwargs["transform_imu"]
 
         result = small_gicp.align(
             target,  # raw Nx3 numpy array

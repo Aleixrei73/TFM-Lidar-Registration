@@ -87,7 +87,7 @@ class PointBasedMetric(Metric):
         x = np.clip(x, -1.0, 1.0)
         x = np.arccos(x)
         rre = 180.0 * x / np.pi
-        return rre
+        return float(rre)
 
     @staticmethod
     def _compute_rte(transform_gt: Transform, transform_pred: Transform) -> float:

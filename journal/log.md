@@ -1,2 +1,2 @@
-### 30/06/2026
-After seeing the results from kiss_matcher and vgicp I found out 
+### 06/07/2026
+It's clear V2X-Real does not work for registration if we want to have an IMU-based initialization first, since it does not provide it. The lidar_pose given is almost the same as the ground truth, so I should use another thing.
