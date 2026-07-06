@@ -22,7 +22,8 @@ dependencies = [
     "pyarrow",
     "small_gicp",
     "probreg",
-    "kiss-matcher"
+    "kiss-matcher",
+    "rosbags"
 ]
 
 [project.optional-dependencies]

@@ -14,8 +14,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 import click
+import numpy as np
 
 from pipeline import ExperimentPipeline
+from ros_utils.rosbags_creator import create_rosbag as write_rosbag
 from utils.loaders import load_config, load_dataset, load_method, load_metric
 from utils.visualizers import visualize_registration
 
@@ -204,6 +206,62 @@ def visualize_single(config_path: Path, index: int) -> None:
         sample["vehicle_pts"].numpy(),
         sample["T_infra_to_vehicle"].numpy(),
         transform,
+    )
+
+
+@cli.command()
+@click.option(
+    "--config-path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+@click.option(
+    "--index",
+    default="all",
+    help="Comma-separated sample indices and/or 'start-end' ranges to run inference on (e.g. '0,5-8,12'), or 'all'.",
+)
+@click.option(
+    "--output-path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    required=True,
+    help="Path to write the resulting .bag file.",
+)
+@click.option(
+    "--fps",
+    type=float,
+    default=15.0,
+    help="Frame rate, in Hz, used to space consecutive messages in time.",
+)
+def create_rosbag(config_path: Path, index: str, output_path: Path, fps: float) -> None:
+    """Write a ROS1 bag with point clouds and the saved transform(s) for the requested samples.
+
+    Parameters
+    ----------
+    config_path : Path
+        Path to the YAML configuration file describing the run.
+    index : str
+        Raw `--index` value, parsed via `_parse_indices`.
+    output_path : Path
+        Path to write the resulting `.bag` file.
+    fps : float
+        Frame rate, in Hz, used to space consecutive messages in time.
+    """
+    config = load_config(config_path)
+    pipeline = build_pipeline(config)
+
+    indices = _parse_indices(index)
+    if isinstance(indices, int):
+        indices = [indices]
+
+    transforms = np.load(config["transforms_path"])
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    write_rosbag(
+        transforms=transforms,
+        indices=indices,
+        dataset=pipeline.dataset,
+        bag_path=str(output_path),
+        fps=fps,
     )
 
 

@@ -1,5 +1,5 @@
 output_path: experiments/identity
-transforms_path: transforms/identity
+transforms_path: /mnt/work/users/aleix.armero/transforms/identity.npy
 overlap_threshold: 1.0
 checkpoint_every : 100
 
