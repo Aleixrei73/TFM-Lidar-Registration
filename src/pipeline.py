@@ -87,8 +87,11 @@ class ExperimentPipeline:
         infra_pts = sample["infra_pts"].numpy()
         vehicle_pts = sample["vehicle_pts"].numpy()
         transform_gt = sample["T_infra_to_vehicle"].numpy()
+        transform_imu = sample["T_infra_to_vehicle_imu"].numpy()
 
-        registered_cloud, transform = self.method.register(infra_pts, vehicle_pts)
+        registered_cloud, transform = self.method.register(
+            infra_pts, vehicle_pts, transform_imu=transform_imu
+        )
 
         inputs = {
             "infra_pts": infra_pts,
@@ -151,7 +154,10 @@ class ExperimentPipeline:
             sample = self.dataset[index]
             infra_pts = sample["infra_pts"].numpy()
             vehicle_pts = sample["vehicle_pts"].numpy()
-            _, transform = self.method.register(infra_pts, vehicle_pts)
+            transform_imu = sample["T_infra_to_vehicle_imu"].numpy()
+            _, transform = self.method.register(
+                infra_pts, vehicle_pts, transform_imu=transform_imu
+            )
             transforms.append(transform)
 
         if save_transform:

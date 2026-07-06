@@ -44,7 +44,7 @@ class VGICP(RegistrationMethod):
         self.voxel_resolution = voxel_resolution
         self.correspondance_distance = correspondance_distance
 
-    def fit(self, source: PointCloud, target: PointCloud) -> Transform:
+    def fit(self, source: PointCloud, target: PointCloud, **kwargs) -> Transform:
         """Estimate the transform that aligns `source` onto `target` via VGICP.
 
         Parameters
@@ -53,6 +53,10 @@ class VGICP(RegistrationMethod):
             Point cloud to be aligned onto `target`, shape (N, 3).
         target : PointCloud
             Reference point cloud, shape (M, 3).
+        **kwargs
+            May contain `transform_imu`, a 4x4 initial transform guess used
+            to seed the alignment. Falls back to the identity transform
+            when not provided.
 
         Returns
         -------
@@ -60,12 +64,12 @@ class VGICP(RegistrationMethod):
             The estimated 4x4 homogeneous transform mapping `source` onto
             `target`.
         """
-        # preprocess_points attaches per-point covariances, required by the
-        # GICP-family cost; the returned KdTree is unused since VGICP looks
-        # up correspondences in the target voxel map instead.
+        transform_imu = kwargs.get("transform_imu", np.eye(4))
+
         result = small_gicp.align(
             target,  # raw Nx3 numpy array
             source,  # raw Mx3 numpy array
+            init_T_target_source=transform_imu,
             registration_type="VGICP",
             downsampling_resolution=self.voxel_size,
             num_threads=self.num_threads,

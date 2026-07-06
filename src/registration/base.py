@@ -51,7 +51,7 @@ class RegistrationMethod(ABC):
         return source, target
 
     @abstractmethod
-    def fit(self, source: PointCloud, target: PointCloud) -> Transform:
+    def fit(self, source: PointCloud, target: PointCloud, **kwargs) -> Transform:
         """Estimate the transform that aligns `source` onto `target`.
 
         Parameters
@@ -60,6 +60,9 @@ class RegistrationMethod(ABC):
             Point cloud to be aligned onto `target`.
         target : PointCloud
             Reference point cloud.
+        **kwargs
+            Optional method-specific parameters (e.g. an initial transform
+            guess). Subclasses pick out what they need and ignore the rest.
 
         Returns
         -------
@@ -70,7 +73,7 @@ class RegistrationMethod(ABC):
         raise NotImplementedError
 
     def register(
-        self, source: PointCloud, target: PointCloud
+        self, source: PointCloud, target: PointCloud, **kwargs
     ) -> tuple[PointCloud, Transform]:
         """Run the full registration pipeline: preprocess, fit, apply.
 
@@ -80,6 +83,8 @@ class RegistrationMethod(ABC):
             Point cloud to be aligned onto `target`.
         target : PointCloud
             Reference point cloud.
+        **kwargs
+            Optional method-specific parameters, forwarded as-is to `fit`.
 
         Returns
         -------
@@ -90,7 +95,7 @@ class RegistrationMethod(ABC):
         logger.debug("Starting registration with %s", type(self).__name__)
 
         preproc_source, preproc_target = self.preprocess(source, target)
-        transform = self.fit(preproc_source, preproc_target)
+        transform = self.fit(preproc_source, preproc_target, **kwargs)
         registered = apply_transform(preproc_source, transform)
 
         logger.debug("Finished registration with %s", type(self).__name__)

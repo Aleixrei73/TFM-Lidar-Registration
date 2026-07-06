@@ -1,0 +1,20 @@
+output_path: experiments/identity
+transforms_path: transforms/identity
+overlap_threshold: 1.0
+checkpoint_every : 100
+
+registration_method:
+  name: identity
+  params: {}          # forwarded as **kwargs to load_method
+
+dataset:
+  name: v2x_real
+  params:            # forwarded as **kwargs to load_dataset
+    root_dir : /mnt/work/datasets/V2X-Real/V2X-Real-Lidar-128/train
+    
+metrics:
+  - name: point_based
+    params: {
+      rte_threshold : 0.2,
+      rre_threshold : 0.2
+    }

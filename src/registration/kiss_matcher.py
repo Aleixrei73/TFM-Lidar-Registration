@@ -53,7 +53,7 @@ class KISSMatcher(RegistrationMethod):
         config = kiss_matcher.KISSMatcherConfig(voxel_size)
         self.matcher = kiss_matcher.KISSMatcher(config)
 
-    def fit(self, source: PointCloud, target: PointCloud) -> Transform:
+    def fit(self, source: PointCloud, target: PointCloud, **kwargs) -> Transform:
         """Estimate the transform that aligns `source` onto `target`.
 
         Parameters

@@ -140,6 +140,6 @@ def compute_overlap_ratio(
     source_aligned = apply_transform(source, transformation)
 
     target_tree = cKDTree(target)
-    distances, _ = target_tree.query(source_aligned)
+    distances, _ = target_tree.query(source_aligned, workers=-1)
 
     return float(np.mean(distances <= threshold))

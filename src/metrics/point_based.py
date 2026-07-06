@@ -77,7 +77,7 @@ class PointBasedMetric(Metric):
         Returns
         -------
         float
-            RRE in radians, computed as
+            RRE in degrees, computed as
             ``acos((trace(R_pred^T @ R_gt) - 1) / 2)``.
         """
         rotation_gt = transform_gt[:3, :3]

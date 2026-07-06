@@ -1,0 +1,2 @@
+### 30/06/2026
+Given the poor results from vgicp (vgicp/*) and the acceptable results from kiss_matcher (kiss_matcher/b5315e5114194b3aa60109ee99936bac), I'll try another global method and then use those two (kiss_matcher and new) as initialization for finer registration methods.

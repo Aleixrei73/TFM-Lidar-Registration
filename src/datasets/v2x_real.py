@@ -134,18 +134,27 @@ class V2XReal(Dataset):
         infra_pts = read_point_cloud(infra_dir / f"{infra_ts}.bin")
         vehicle_pts = read_point_cloud(vehicle_dir / f"{vehicle_ts}.bin")
 
-        infra_pose = load_yaml(infra_dir / f"{infra_ts}.yaml")["true_ego_pose"]
-        vehicle_pose = load_yaml(vehicle_dir / f"{vehicle_ts}.yaml")["true_ego_pose"]
+        infra_imu_pose = load_yaml(infra_dir / f"{infra_ts}.yaml")["lidar_pose"]
+        vehicle_imu_pose = load_yaml(vehicle_dir / f"{vehicle_ts}.yaml")["lidar_pose"]
+
+        infra_true_pose = load_yaml(infra_dir / f"{infra_ts}.yaml")["true_ego_pose"]
+        vehicle_true_pose = load_yaml(vehicle_dir / f"{vehicle_ts}.yaml")[
+            "true_ego_pose"
+        ]
 
         # x1_to_x2 maps points from x1's local frame into x2's local frame
-        T_vehicle_to_infra = x1_to_x2(vehicle_pose, infra_pose)
-        T_infra_to_vehicle = x1_to_x2(infra_pose, vehicle_pose)
+        T_vehicle_to_infra_imu = x1_to_x2(vehicle_imu_pose, infra_imu_pose)
+        T_infra_to_vehicle_imu = x1_to_x2(infra_imu_pose, vehicle_imu_pose)
+        T_vehicle_to_infra = x1_to_x2(vehicle_true_pose, infra_true_pose)
+        T_infra_to_vehicle = x1_to_x2(infra_true_pose, vehicle_true_pose)
 
         return {
             "infra_pts": torch.from_numpy(infra_pts),
             "vehicle_pts": torch.from_numpy(vehicle_pts),
             "T_vehicle_to_infra": torch.from_numpy(T_vehicle_to_infra).float(),
             "T_infra_to_vehicle": torch.from_numpy(T_infra_to_vehicle).float(),
+            "T_vehicle_to_infra_imu": torch.from_numpy(T_vehicle_to_infra_imu).float(),
+            "T_infra_to_vehicle_imu": torch.from_numpy(T_infra_to_vehicle_imu).float(),
             "meta": {
                 "scenario": infra_dir.parent.name,
                 "infra_timestamp": infra_ts,
