@@ -8,6 +8,7 @@ runs one of the pipeline's operations on it.
 from __future__ import annotations
 
 import logging
+import sys
 import uuid
 from pathlib import Path
 from typing import Any, Literal
@@ -79,8 +80,9 @@ def _parse_indices(value: str) -> int | list[int] | Literal["all"]:
     Parameters
     ----------
     value : str
-        Raw `--index` option value: either the literal "all" or a
-        comma-separated list of integers (e.g. "0,1,2").
+        Raw `--index` option value: either the literal "all", a
+        comma-separated list of integers (e.g. "0,1,2"), and/or
+        inclusive ranges of the form "start-end" (e.g. "0,5-8,12").
 
     Returns
     -------
@@ -91,13 +93,25 @@ def _parse_indices(value: str) -> int | list[int] | Literal["all"]:
     if value == "all":
         return "all"
 
-    indices = [int(item) for item in value.split(",")]
+    indices: list[int] = []
+    for item in value.split(","):
+        if "-" in item:
+            start, end = item.split("-")
+            indices.extend(range(int(start), int(end) + 1))
+        else:
+            indices.append(int(item))
+
     return indices[0] if len(indices) == 1 else indices
 
 
 @click.group()
 def cli() -> None:
     """Evaluate point cloud registration methods on lidar datasets."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        stream=sys.stdout,
+    )
 
 
 @cli.command()
@@ -129,7 +143,7 @@ def evaluate(config_path: Path) -> None:
 @click.option(
     "--index",
     default="all",
-    help="Comma-separated sample indices to run inference on (e.g. '0,1,2'), or 'all'.",
+    help="Comma-separated sample indices and/or 'start-end' ranges to run inference on (e.g. '0,5-8,12'), or 'all'.",
 )
 @click.option(
     "--save-transform",
