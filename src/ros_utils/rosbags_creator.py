@@ -27,19 +27,21 @@ typestore = get_typestore(Stores.ROS1_NOETIC)
 
 # rosbags' ROS1_NOETIC store does not ship tf2_msgs (only the ROS2 stores
 # do), so it must be registered by hand from its .msg definition.
-typestore.register(get_types_from_msg(
-    'geometry_msgs/TransformStamped[] transforms', 'tf2_msgs/msg/TFMessage'
-))
+typestore.register(
+    get_types_from_msg(
+        "geometry_msgs/TransformStamped[] transforms", "tf2_msgs/msg/TFMessage"
+    )
+)
 
-Header = typestore.types['std_msgs/msg/Header']
-Time = typestore.types['builtin_interfaces/msg/Time']
-PointCloud2 = typestore.types['sensor_msgs/msg/PointCloud2']
-PointField = typestore.types['sensor_msgs/msg/PointField']
-TransformStamped = typestore.types['geometry_msgs/msg/TransformStamped']
-Transform = typestore.types['geometry_msgs/msg/Transform']
-Vector3 = typestore.types['geometry_msgs/msg/Vector3']
-Quaternion = typestore.types['geometry_msgs/msg/Quaternion']
-TFMessage = typestore.types['tf2_msgs/msg/TFMessage']
+Header = typestore.types["std_msgs/msg/Header"]
+Time = typestore.types["builtin_interfaces/msg/Time"]
+PointCloud2 = typestore.types["sensor_msgs/msg/PointCloud2"]
+PointField = typestore.types["sensor_msgs/msg/PointField"]
+TransformStamped = typestore.types["geometry_msgs/msg/TransformStamped"]
+Transform = typestore.types["geometry_msgs/msg/Transform"]
+Vector3 = typestore.types["geometry_msgs/msg/Vector3"]
+Quaternion = typestore.types["geometry_msgs/msg/Quaternion"]
+TFMessage = typestore.types["tf2_msgs/msg/TFMessage"]
 
 
 def make_time(seconds: float):
@@ -52,9 +54,9 @@ def make_pointcloud2(points_xyz: np.ndarray, frame_id: str, seq: int, stamp):
     """points_xyz: Nx3 float32 numpy array."""
     n_points = points_xyz.shape[0]
     fields = [
-        PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
-        PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
-        PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+        PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
+        PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
+        PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
     ]
     header = Header(seq=seq, stamp=stamp, frame_id=frame_id)
     raw = points_xyz.astype(np.float32).tobytes()
@@ -71,7 +73,9 @@ def make_pointcloud2(points_xyz: np.ndarray, frame_id: str, seq: int, stamp):
     )
 
 
-def make_transform_stamped(parent_frame, child_frame, translation, rotation_quat_xyzw, seq, stamp):
+def make_transform_stamped(
+    parent_frame, child_frame, translation, rotation_quat_xyzw, seq, stamp
+):
     tx, ty, tz = translation
     qx, qy, qz, qw = rotation_quat_xyzw
     header = Header(seq=seq, stamp=stamp, frame_id=parent_frame)
@@ -135,31 +139,51 @@ def create_rosbag(
     dt = 1.0 / fps
 
     with Writer(bag_path) as writer:
-        conn_pc1 = writer.add_connection('/pointcloud_1', PointCloud2.__msgtype__, typestore=typestore)
-        conn_pc2 = writer.add_connection('/pointcloud_2', PointCloud2.__msgtype__, typestore=typestore)
-        conn_tf = writer.add_connection('/tf', TFMessage.__msgtype__, typestore=typestore)
+        conn_pc1 = writer.add_connection(
+            "/pointcloud_1", PointCloud2.__msgtype__, typestore=typestore
+        )
+        conn_pc2 = writer.add_connection(
+            "/pointcloud_2", PointCloud2.__msgtype__, typestore=typestore
+        )
+        conn_tf = writer.add_connection(
+            "/tf", TFMessage.__msgtype__, typestore=typestore
+        )
 
         for i, idx in enumerate(resolved_indices):
             sample = dataset[idx]
 
             t_seconds = i * dt
             stamp = make_time(t_seconds)
-            timestamp_ns = int(round(t_seconds * 1e9))  # rosbags timestamps are int nanoseconds
+            timestamp_ns = int(
+                round(t_seconds * 1e9)
+            )  # rosbags timestamps are int nanoseconds
 
             infra_pts = sample["infra_pts"].numpy()
             vehicle_pts = sample["vehicle_pts"].numpy()
 
-            pc1_msg = make_pointcloud2(infra_pts, 'infra', i, stamp)
-            writer.write(conn_pc1, timestamp_ns, typestore.serialize_ros1(pc1_msg, PointCloud2.__msgtype__))
+            pc1_msg = make_pointcloud2(infra_pts, "infra", i, stamp)
+            writer.write(
+                conn_pc1,
+                timestamp_ns,
+                typestore.serialize_ros1(pc1_msg, PointCloud2.__msgtype__),
+            )
 
-            pc2_msg = make_pointcloud2(vehicle_pts, 'vehicle', i, stamp)
-            writer.write(conn_pc2, timestamp_ns, typestore.serialize_ros1(pc2_msg, PointCloud2.__msgtype__))
+            pc2_msg = make_pointcloud2(vehicle_pts, "vehicle", i, stamp)
+            writer.write(
+                conn_pc2,
+                timestamp_ns,
+                typestore.serialize_ros1(pc2_msg, PointCloud2.__msgtype__),
+            )
 
             T = transforms[i]
             translation = T[:3, 3]
             rotation_quat_xyzw = Rotation.from_matrix(T[:3, :3]).as_quat()
             transform = make_transform_stamped(
-                'vehicle', 'infra', translation, rotation_quat_xyzw, i, stamp
+                "vehicle", "infra", translation, rotation_quat_xyzw, i, stamp
             )
             tf_msg = TFMessage(transforms=[transform])
-            writer.write(conn_tf, timestamp_ns, typestore.serialize_ros1(tf_msg, TFMessage.__msgtype__))
+            writer.write(
+                conn_tf,
+                timestamp_ns,
+                typestore.serialize_ros1(tf_msg, TFMessage.__msgtype__),
+            )

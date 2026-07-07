@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 _METHODS: dict[str, type[RegistrationMethod]] = {
     "kiss_matcher": KISSMatcher,
     "vgicp": VGICP,
-    "identity" : IdentityMethod,
+    "identity": IdentityMethod,
 }
 _METRICS: dict[str, type[Metric]] = {"point_based": PointBasedMetric}
 _DATASETS: dict[str, type[Dataset]] = {"v2x_real": V2XReal}

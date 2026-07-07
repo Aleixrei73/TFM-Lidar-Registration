@@ -1,5 +1,5 @@
 output_path: experiments/vgicp-128-imu
-transforms_path: transforms/vgicp-128-imu
+transforms_path: /mnt/work/users/aleix.armero/transforms/vgicp-128-imu.npy
 overlap_threshold: 1.0
 checkpoint_every : 100
 
