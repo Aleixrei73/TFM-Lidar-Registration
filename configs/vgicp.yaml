@@ -1,4 +1,4 @@
-output_path: experiments/vgicp-128-imu
+output_path: experiments/vgicp-128-noisy-0
 transforms_path: /mnt/work/users/aleix.armero/transforms/vgicp-128-imu.npy
 overlap_threshold: 1.0
 checkpoint_every : 100
@@ -11,6 +11,8 @@ dataset:
   name: v2x_real
   params:            # forwarded as **kwargs to load_dataset
     root_dir : /mnt/work/datasets/V2X-Real/V2X-Real-Lidar-128/train
+    position_noise : 0
+    angular_noise : 0
     
 metrics:
   - name: point_based

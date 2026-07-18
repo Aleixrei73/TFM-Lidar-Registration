@@ -4,6 +4,12 @@ from scipy.spatial import cKDTree
 PointCloud = np.ndarray
 Transform = np.ndarray
 
+# WGS84 ellipsoid parameters, used to convert GPS coordinates to a local
+# East-North-Up frame.
+WGS84_A = 6378137.0
+WGS84_F = 1 / 298.257223563
+WGS84_E2 = WGS84_F * (2 - WGS84_F)
+
 
 def x_to_world(pose: list[float]) -> Transform:
     """Compute the transformation matrix from x-coordinate system to carla world system.
@@ -69,6 +75,85 @@ def x1_to_x2(x1: list[float], x2: list[float]) -> Transform:
 
     transformation_matrix = np.dot(world_to_x2, x1_to_world)
     return transformation_matrix
+
+
+def geodetic_to_ecef(lat_deg: float, lon_deg: float, alt_m: float) -> np.ndarray:
+    """Convert WGS84 (lat, lon, alt) to Earth-Centered-Earth-Fixed XYZ, in meters."""
+    lat, lon = np.radians(lat_deg), np.radians(lon_deg)
+    sin_lat, cos_lat = np.sin(lat), np.cos(lat)
+
+    n = WGS84_A / np.sqrt(1 - WGS84_E2 * sin_lat**2)
+    x = (n + alt_m) * cos_lat * np.cos(lon)
+    y = (n + alt_m) * cos_lat * np.sin(lon)
+    z = (n * (1 - WGS84_E2) + alt_m) * sin_lat
+
+    return np.array([x, y, z])
+
+
+def ecef_to_enu(
+    ecef: np.ndarray, ref_lat_deg: float, ref_lon_deg: float, ref_ecef: np.ndarray
+) -> np.ndarray:
+    """Project an ECEF point into the local East-North-Up frame at a reference point."""
+    lat, lon = np.radians(ref_lat_deg), np.radians(ref_lon_deg)
+    sin_lat, cos_lat = np.sin(lat), np.cos(lat)
+    sin_lon, cos_lon = np.sin(lon), np.cos(lon)
+
+    rotation = np.array(
+        [
+            [-sin_lon, cos_lon, 0],
+            [-sin_lat * cos_lon, -sin_lat * sin_lon, cos_lat],
+            [cos_lat * cos_lon, cos_lat * sin_lon, sin_lat],
+        ]
+    )
+
+    return rotation @ (ecef - ref_ecef)
+
+
+def gps_to_enu(
+    lat_deg: float,
+    lon_deg: float,
+    alt_m: float,
+    ref_lat_deg: float,
+    ref_lon_deg: float,
+    ref_alt_m: float,
+) -> np.ndarray:
+    """Convert a WGS84 (lat, lon, alt) into local East-North-Up meters around a reference point."""
+    ecef = geodetic_to_ecef(lat_deg, lon_deg, alt_m)
+    ref_ecef = geodetic_to_ecef(ref_lat_deg, ref_lon_deg, ref_alt_m)
+
+    return ecef_to_enu(ecef, ref_lat_deg, ref_lon_deg, ref_ecef)
+
+
+def heading_to_yaw(heading_deg: float) -> float:
+    """Convert a compass heading (0deg=North, clockwise) to a math yaw (0deg=East, counter-clockwise)."""
+    return 90.0 - heading_deg
+
+
+def euler_to_rotation_matrix(
+    roll_deg: float, pitch_deg: float, yaw_deg: float
+) -> np.ndarray:
+    """Build a body-to-ENU rotation matrix from an intrinsic yaw-pitch-roll (Z-Y-X) sequence."""
+    roll, pitch, yaw = np.radians(roll_deg), np.radians(pitch_deg), np.radians(yaw_deg)
+    c_r, s_r = np.cos(roll), np.sin(roll)
+    c_p, s_p = np.cos(pitch), np.sin(pitch)
+    c_y, s_y = np.cos(yaw), np.sin(yaw)
+
+    rot_z = np.array([[c_y, -s_y, 0], [s_y, c_y, 0], [0, 0, 1]])
+    rot_y = np.array([[c_p, 0, s_p], [0, 1, 0], [-s_p, 0, c_p]])
+    rot_x = np.array([[1, 0, 0], [0, c_r, -s_r], [0, s_r, c_r]])
+
+    return rot_z @ rot_y @ rot_x
+
+
+def pose_to_matrix(
+    x: float, y: float, z: float, roll_deg: float, pitch_deg: float, yaw_deg: float
+) -> Transform:
+    """Assemble an ENU position and roll/pitch/yaw into a homogeneous pose-to-world transform."""
+    matrix = np.eye(4)
+    matrix[:3, :3] = euler_to_rotation_matrix(roll_deg, pitch_deg, yaw_deg)
+    matrix[:3, 3] = [x, y, z]
+
+    return matrix
 
 
 def apply_transform(points: PointCloud, transform: Transform) -> PointCloud:
