@@ -61,13 +61,40 @@ class ExperimentPipeline:
             Run configuration. Must contain an `"output_path"` key, the
             directory where results and the configuration are saved. May
             contain a `"checkpoint_every"` key (default 10) controlling
-            how often `evaluate` checkpoints partial results to disk.
+            how often `evaluate` checkpoints partial results to disk. May
+            contain a `"use_previous"` key (default False); if True, the
+            initial transform guess for a sample is the previous sample's
+            registered transform instead of its own IMU-derived transform,
+            except on samples with `meta["is_first_frame"]` True, which
+            always use their own IMU-derived transform.
         """
         self.method = method
         self.dataset = dataset
         self.metrics = metrics
         self.config = config
         self.output_path = Path(config["output_path"])
+        self.use_previous = config.get("use_previous", False)
+        self._previous_transform: np.ndarray | None = None
+
+    def _resolve_transform_imu(self, sample: dict) -> np.ndarray:
+        """Get the initial transform guess for a sample.
+
+        Parameters
+        ----------
+        sample : dict
+            Dataset item, as returned by `self.dataset[idx]`.
+
+        Returns
+        -------
+        np.ndarray
+            `self._previous_transform` when `self.use_previous` is True
+            and the sample is not a first frame; the sample's own
+            IMU-derived transform otherwise.
+        """
+        if self.use_previous and not sample["meta"]["is_first_frame"]:
+            return self._previous_transform
+
+        return sample["T_infra_to_vehicle_imu"].numpy()
 
     def evaluate_single(self, idx: int) -> dict[str, float]:
         """Register a single dataset sample and compute all metrics on it.
@@ -87,11 +114,12 @@ class ExperimentPipeline:
         infra_pts = sample["infra_pts"].numpy()
         vehicle_pts = sample["vehicle_pts"].numpy()
         transform_gt = sample["T_infra_to_vehicle"].numpy()
-        transform_imu = sample["T_infra_to_vehicle_imu"].numpy()
+        transform_imu = self._resolve_transform_imu(sample)
 
         registered_cloud, transform = self.method.register(
             infra_pts, vehicle_pts, transform_imu=transform_imu
         )
+        self._previous_transform = transform
 
         inputs = {
             "infra_pts": infra_pts,
@@ -141,6 +169,8 @@ class ExperimentPipeline:
             is a single int; a list is returned for "all" or a list of
             indices.
         """
+        self._previous_transform = None
+
         single = isinstance(idx, int)
         if idx == "all":
             indices = list(range(len(self.dataset)))
@@ -154,10 +184,11 @@ class ExperimentPipeline:
             sample = self.dataset[index]
             infra_pts = sample["infra_pts"].numpy()
             vehicle_pts = sample["vehicle_pts"].numpy()
-            transform_imu = sample["T_infra_to_vehicle_imu"].numpy()
+            transform_imu = self._resolve_transform_imu(sample)
             _, transform = self.method.register(
                 infra_pts, vehicle_pts, transform_imu=transform_imu
             )
+            self._previous_transform = transform
             transforms.append(transform)
 
         if save_transform:
@@ -186,6 +217,7 @@ class ExperimentPipeline:
         """
         logger.info("Starting evaluation over %d samples", len(self.dataset))
         checkpoint_every = self.config.get("checkpoint_every", 10)
+        self._previous_transform = None
 
         # Since the path is sanitized and created on instantiation, this is not needed
         # self.output_path.mkdir(parents=True, exist_ok=True)

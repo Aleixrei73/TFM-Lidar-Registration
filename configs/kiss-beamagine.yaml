@@ -11,7 +11,7 @@ dataset:
   name: beamagine
   params:            # forwarded as **kwargs to load_dataset
     root_dir : /mnt/work/datasets/V2X-Real/CROWDSOURCED_EWOC_20260616_dataset
-    json_folder: v0.1
+    json_folder: v0.2
     scene_number: 1
     
 metrics:

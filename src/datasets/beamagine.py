@@ -187,6 +187,9 @@ class Beamagine(Dataset):
             "T_infra_to_vehicle_imu": torch.from_numpy(
                 infra_sample["T_fixed_to_car"]
             ).float(),
+            "meta": {
+                "is_first_frame": idx == 0,
+            },
         }
 
     def _build_scene_correspondances(self) -> Tuple[dict, dict]:

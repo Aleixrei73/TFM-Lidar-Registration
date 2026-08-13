@@ -3,7 +3,7 @@
 #SBATCH --partition=gpi.compute
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
-#SBATCH --time=08:00:00
+#SBATCH --time=24:00:00
 #SBATCH --output=experiments/logs/%x_%j.out
 #SBATCH --error=experiments/logs/%x_%j.err
 

@@ -26,6 +26,7 @@ class VGICP(RegistrationMethod):
         num_threads: int = 4,
         voxel_resolution: float = 1.0,
         correspondance_distance: float = 5,
+        use_initialization: bool = False,
     ) -> None:
         """Store the voxel resolution used for downsampling and registration.
 
@@ -43,6 +44,7 @@ class VGICP(RegistrationMethod):
         self.num_threads = num_threads
         self.voxel_resolution = voxel_resolution
         self.correspondance_distance = correspondance_distance
+        self.use_initialization = use_initialization
 
     def fit(self, source: PointCloud, target: PointCloud, **kwargs) -> Transform:
         """Estimate the transform that aligns `source` onto `target` via VGICP.
@@ -64,7 +66,9 @@ class VGICP(RegistrationMethod):
             The estimated 4x4 homogeneous transform mapping `source` onto
             `target`.
         """
-        transform_imu = kwargs["transform_imu"]
+        transform_imu = (
+            kwargs["transform_imu"] if self.use_initialization else np.eye(4)
+        )
 
         result = small_gicp.align(
             target,  # raw Nx3 numpy array

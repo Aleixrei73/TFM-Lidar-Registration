@@ -16,7 +16,7 @@ from typing import List, Literal, Union
 
 import numpy as np
 from rosbags.rosbag1 import Writer
-from rosbags.typesys import Stores, get_typestore, get_types_from_msg
+from rosbags.typesys import Stores, get_types_from_msg, get_typestore
 from scipy.spatial.transform import Rotation
 
 from datasets.v2x_real import V2XReal

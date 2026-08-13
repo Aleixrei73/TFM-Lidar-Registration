@@ -1,0 +1,35 @@
+output_path: experiments/vgicp-128-grid-init-noise
+transforms_path: /mnt/work/users/aleix.armero/transforms/vgicp-128-imu-grid.npy
+overlap_threshold: 1.0
+checkpoint_every : 100
+
+registration_method:
+  name: vgicp-grid
+  params: {
+    voxel_size : 0.2,
+    voxel_resolution : 4.0,
+    num_threads : 4,
+    use_initialization: true,
+    coarse_range : 2.0,
+    coarse_step_size : 0.5,
+    coarse_angle_range : 25.0,
+    coarse_angle_step_size : 5.0,
+    fine_range : 1.0,
+    fine_step_size : 0.2,
+    fine_angle_range : 5.0,
+    fine_angle_step_size : 1.0
+    }          # forwarded as **kwargs to load_method
+
+dataset:
+  name: v2x_real
+  params:            # forwarded as **kwargs to load_dataset
+    root_dir : /mnt/work/datasets/V2X-Real/V2X-Real-Lidar-128/train
+    position_noise : 1
+    angular_noise : 12.5
+    
+metrics:
+  - name: point_based
+    params: {
+      rte_threshold : 0.2,
+      rre_threshold : 0.2
+    }

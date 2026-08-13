@@ -3,6 +3,7 @@ V2X-Real Dataset for Point Cloud Registration
 ==============================================
 """
 
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -12,7 +13,6 @@ import yaml
 from scipy.optimize import brentq
 from scipy.special import ive
 from torch.utils.data import Dataset
-import logging
 
 from utils.helpers import x1_to_x2
 
@@ -20,6 +20,7 @@ from utils.helpers import x1_to_x2
 PairEntry = Tuple[Tuple[Path, str], Tuple[Path, str]]
 
 logger = logging.getLogger(__name__)
+
 
 def read_point_cloud(path: Path) -> np.ndarray:
     """
@@ -174,13 +175,15 @@ class V2XReal(Dataset):
         Path to a dataset split folder (e.g. ``v2xreal/train``).
     """
 
-    def __init__(self, root_dir: str, position_noise : float = 0, angular_noise : float = 0) -> None:
+    def __init__(
+        self, root_dir: str, position_noise: float = 0, angular_noise: float = 0
+    ) -> None:
         root_dir = Path(root_dir)
         if not root_dir.exists():
             raise FileNotFoundError(f"Directory not found: {root_dir}")
         if not root_dir.is_dir():
             raise NotADirectoryError(f"Not a directory: {root_dir}")
-    
+
         self.root_dir = root_dir
         self.position_noise = position_noise
         self.angular_noise = angular_noise
@@ -191,7 +194,9 @@ class V2XReal(Dataset):
         )
         self.pairs = build_pairs(self.root_dir)
 
-        logger.info(f"Using positional noise : {position_noise} and angular noise : {angular_noise}")
+        logger.info(
+            f"Using positional noise : {position_noise} and angular noise : {angular_noise}"
+        )
 
     def __getitem__(self, idx: int) -> Dict:
         """
@@ -208,8 +213,8 @@ class V2XReal(Dataset):
             ``infra_pts`` / ``vehicle_pts`` : (N, 3) float32 tensors with
             raw point clouds. ``T_vehicle_to_infra`` / ``T_infra_to_vehicle``
             : (4, 4) float32 tensors with the rigid transforms between the
-            two LiDAR frames. ``meta`` : dict with scenario, timestamps and
-            agent ids.
+            two LiDAR frames. ``meta`` : dict with scenario, timestamps,
+            agent ids and an ``is_first_frame`` flag.
         """
         (infra_dir, infra_ts), (vehicle_dir, vehicle_ts) = self.pairs[idx]
 
@@ -246,6 +251,9 @@ class V2XReal(Dataset):
                 "vehicle_timestamp": vehicle_ts,
                 "infra_agent": infra_dir.name,
                 "vehicle_agent": vehicle_dir.name,
+                # A new agent pair always restarts numbering at 000000, so
+                # this literal check also detects "new scene" transitions.
+                "is_first_frame": infra_ts == "000000" and vehicle_ts == "000000",
             },
         }
 

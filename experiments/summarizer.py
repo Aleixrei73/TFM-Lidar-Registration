@@ -82,13 +82,14 @@ def build_row(
     timestamp: str,
     n_samples: int,
     aggregate: dict[str, dict[str, float]],
+    path: Path,
 ) -> dict[str, Any]:
     """Flatten run identity and an aggregate dict into a single parquet row.
 
     Parameters
     ----------
     algorithm : str
-        Name of the algorithm's experiments subfolder.
+        `registration_method.name` from the run's config.yaml.
     run_id : str
         Uuid of the run.
     timestamp : str
@@ -97,6 +98,9 @@ def build_row(
         Number of samples the aggregate was computed over.
     aggregate : dict[str, dict[str, float]]
         Mapping from metric name to its `{"mean", "std"}` dict.
+    path : Path
+        Path to the run's `metrics.json`, stored as an absolute path so
+        per-sample data can be looked up later.
 
     Returns
     -------
@@ -109,6 +113,7 @@ def build_row(
         "run_id": run_id,
         "timestamp": timestamp,
         "n_samples": n_samples,
+        "path": str(path.resolve()),
     }
     for metric, stats in aggregate.items():
         row[f"{metric}_mean"] = stats["mean"]
@@ -116,8 +121,28 @@ def build_row(
     return row
 
 
-def load_config_params(path: Path) -> dict[str, Any]:
-    """Extract registration method and metric parameters from a run's config.yaml.
+def _coerce_none(value: Any) -> Any:
+    """Map the literal string "None" to Python `None`.
+
+    Some configs were authored with Python's `None` instead of YAML's `null`,
+    which `yaml.safe_load` reads back as the string `"None"` and would
+    otherwise mix `str` and numeric dtypes in the same parquet column.
+
+    Parameters
+    ----------
+    value : Any
+        Value read from `config.yaml`.
+
+    Returns
+    -------
+    Any
+        `None` if `value` is the string `"None"`, otherwise `value` unchanged.
+    """
+    return None if value == "None" else value
+
+
+def load_config(path: Path) -> dict[str, Any] | None:
+    """Load and parse a run's config.yaml.
 
     Parameters
     ----------
@@ -126,33 +151,62 @@ def load_config_params(path: Path) -> dict[str, Any]:
 
     Returns
     -------
-    dict[str, Any]
-        `registration_method.params` prefixed with `regmethod_`, and each
-        `metrics[].params` prefixed with `metric_{metric_name}_`. Empty if
-        `config.yaml` is missing or malformed.
+    dict[str, Any] | None
+        The parsed config, or `None` if `config.yaml` is missing or malformed.
     """
     config_path = path.parent / "config.yaml"
     if not config_path.exists():
-        logger.warning("No config params for %s: config.yaml not found", path)
-        return {}
+        logger.warning("No config for %s: config.yaml not found", path)
+        return None
 
     try:
         with config_path.open() as f:
-            config = yaml.safe_load(f)
-        registration_method = config.get("registration_method", {})
-        metrics = config.get("metrics", [])
+            return yaml.safe_load(f)
     except (yaml.YAMLError, AttributeError) as exc:
-        logger.warning("No config params for %s: malformed config.yaml (%s)", path, exc)
-        return {}
+        logger.warning("No config for %s: malformed config.yaml (%s)", path, exc)
+        return None
+
+
+_METHOD_KEYS = {"dataset", "metrics", "registration_method"}
+
+
+def load_config_params(config: dict[str, Any]) -> dict[str, Any]:
+    """Extract registration method, metric, and top-level parameters from a run's config.
+
+    Parameters
+    ----------
+    config : dict[str, Any]
+        Parsed `config.yaml` contents.
+
+    Returns
+    -------
+    dict[str, Any]
+        `registration_method.params` prefixed with `regmethod_`,
+        `dataset.params` prefixed with `dataset_`, each `metrics[].params`
+        prefixed with `metric_{metric_name}_`, and every other top-level
+        key (e.g. `use_previous`) prefixed with `config_`.
+    """
+    registration_method = config.get("registration_method", {})
+    dataset = config.get("dataset", {})
+    metrics = config.get("metrics", [])
 
     params = {
-        f"regmethod_{key}": value
+        f"regmethod_{key}": _coerce_none(value)
         for key, value in registration_method.get("params", {}).items()
     }
+    params.update(
+        {
+            f"dataset_{key}": _coerce_none(value)
+            for key, value in dataset.get("params", {}).items()
+        }
+    )
     for metric in metrics:
         name = metric.get("name")
         for key, value in metric.get("params", {}).items():
-            params[f"metric_{name}_{key}"] = value
+            params[f"metric_{name}_{key}"] = _coerce_none(value)
+    for key, value in config.items():
+        if key not in _METHOD_KEYS:
+            params[f"config_{key}"] = _coerce_none(value)
     return params
 
 
@@ -173,7 +227,7 @@ def process_metrics_file(
         The full-data row and a mapping from overlap threshold to its
         recomputed row, or `None` if the file was malformed.
     """
-    algorithm, run_id = path.parts[-3], path.parts[-2]
+    run_id = path.parts[-2]
 
     try:
         with path.open() as f:
@@ -185,9 +239,16 @@ def process_metrics_file(
         logger.warning("Skipping %s: malformed metrics.json (%s)", path, exc)
         return None
 
-    config_params = load_config_params(path)
+    config = load_config(path)
+    if config is None:
+        return None
+    algorithm = config.get("registration_method", {}).get("name")
+    if algorithm is None:
+        logger.warning("Skipping %s: registration_method.name missing in config.yaml", path)
+        return None
+    config_params = load_config_params(config)
 
-    full_row = build_row(algorithm, run_id, timestamp, len(per_sample), aggregate)
+    full_row = build_row(algorithm, run_id, timestamp, len(per_sample), aggregate, path)
     full_row.update(config_params)
 
     metric_names = set(aggregate)
@@ -199,7 +260,7 @@ def process_metrics_file(
         ]
         threshold_aggregate = aggregate_metrics(filtered, metric_names)
         threshold_row = build_row(
-            algorithm, run_id, timestamp, len(filtered), threshold_aggregate
+            algorithm, run_id, timestamp, len(filtered), threshold_aggregate, path
         )
         threshold_row.update(config_params)
         threshold_rows[threshold] = threshold_row

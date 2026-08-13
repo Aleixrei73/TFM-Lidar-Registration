@@ -16,9 +16,9 @@ from typing import Any
 import yaml
 from torch.utils.data import Dataset
 
-from datasets import V2XReal, Beamagine
+from datasets import Beamagine, V2XReal
 from metrics import Metric, PointBasedMetric
-from registration import VGICP, KISSMatcher, RegistrationMethod, IdentityMethod
+from registration import VGICP, IdentityMethod, KISSMatcher, RegistrationMethod, VGICPParam, VGICPCOFI, VGICPPlane, VGICPPlaneInit, VGICPPlaneRemoved, VGICPPlaneRemovedInit, VGICPPlaneRemovedMatch, VGICPGrid
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,14 @@ logger = logging.getLogger(__name__)
 _METHODS: dict[str, type[RegistrationMethod]] = {
     "kiss_matcher": KISSMatcher,
     "vgicp": VGICP,
+    "vgicp-param" : VGICPParam,
+    "vgicp-cofi" : VGICPCOFI,
+    "vgicp-plane" : VGICPPlane,
+    "vgicp-plane-init" : VGICPPlaneInit,
+    "vgicp-plane-remove" : VGICPPlaneRemoved,
+    "vgicp-plane-remove-init" : VGICPPlaneRemovedInit,
+    "vgicp-plane-remove-match" : VGICPPlaneRemovedMatch,
+    "vgicp-grid" : VGICPGrid,
     "identity": IdentityMethod,
 }
 _METRICS: dict[str, type[Metric]] = {"point_based": PointBasedMetric}
