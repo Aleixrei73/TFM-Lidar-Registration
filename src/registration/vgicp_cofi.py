@@ -23,8 +23,8 @@ class VGICPCOFI(RegistrationMethod):
     def __init__(
         self,
         initial_voxel_size: float,
-        fine_voxel_size : float,
-        steps : int,
+        fine_voxel_size: float,
+        steps: int,
         num_threads: int = 4,
         voxel_resolution: float = 4.0,
         use_initialization: bool = False,
@@ -49,7 +49,6 @@ class VGICPCOFI(RegistrationMethod):
         self.use_initialization = use_initialization
 
     def fit(self, source: PointCloud, target: PointCloud, **kwargs) -> Transform:
-
         """Estimate the transform that aligns `source` onto `target` via VGICP.
 
         Parameters
@@ -74,14 +73,16 @@ class VGICPCOFI(RegistrationMethod):
             kwargs["transform_imu"] if self.use_initialization else np.eye(4)
         )
 
-        for voxel_size in np.linspace(self.initial_voxel_size, self.fine_voxel_size, self.steps):
+        for voxel_size in np.linspace(
+            self.initial_voxel_size, self.fine_voxel_size, self.steps
+        ):
             current_transform_aux = small_gicp.align(
                 target,  # raw Nx3 numpy array
                 source,  # raw Mx3 numpy array
                 init_T_target_source=current_transform,
                 registration_type="VGICP",
                 downsampling_resolution=voxel_size,
-                voxel_resolution = self.voxel_resolution * voxel_size,
+                voxel_resolution=self.voxel_resolution * voxel_size,
                 num_threads=self.num_threads,
             )
             current_transform = current_transform_aux.T_target_source

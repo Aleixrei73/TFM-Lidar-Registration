@@ -80,7 +80,7 @@ class VGICPPlaneInit(RegistrationMethod):
             init_T_target_source=transform_imu,
             registration_type="VGICP",
             downsampling_resolution=self.voxel_size,
-            voxel_resolution = self.voxel_resolution,
+            voxel_resolution=self.voxel_resolution,
             num_threads=self.num_threads,
         )
 
@@ -90,7 +90,7 @@ class VGICPPlaneInit(RegistrationMethod):
             init_T_target_source=result.T_target_source,
             registration_type="VGICP",
             downsampling_resolution=self.voxel_size,
-            voxel_resolution = self.voxel_resolution,
+            voxel_resolution=self.voxel_resolution,
             num_threads=self.num_threads,
         )
 

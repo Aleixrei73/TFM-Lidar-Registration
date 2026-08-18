@@ -75,15 +75,15 @@ class VGICPPlaneRemovedMatch(RegistrationMethod):
         target_pcd.points = o3d.utility.Vector3dVector(target)
 
         source_plane_model, source_inlier_idx = source_pcd.segment_plane(
-            distance_threshold=0.15,   # max distance (m) from plane to count as "road"
-            ransac_n=3,                # points used to fit each candidate plane
-            num_iterations=1000
+            distance_threshold=0.15,  # max distance (m) from plane to count as "road"
+            ransac_n=3,  # points used to fit each candidate plane
+            num_iterations=1000,
         )
 
         target_plane_model, target_inlier_idx = target_pcd.segment_plane(
-            distance_threshold=0.15,   # max distance (m) from plane to count as "road"
-            ransac_n=3,                # points used to fit each candidate plane
-            num_iterations=1000
+            distance_threshold=0.15,  # max distance (m) from plane to count as "road"
+            ransac_n=3,  # points used to fit each candidate plane
+            num_iterations=1000,
         )
 
         source_inlier_mask = np.zeros(len(source), dtype=bool)
@@ -104,7 +104,7 @@ class VGICPPlaneRemovedMatch(RegistrationMethod):
             init_T_target_source=transform_imu,
             registration_type="VGICP",
             downsampling_resolution=self.voxel_size,
-            voxel_resolution = self.voxel_resolution,
+            voxel_resolution=self.voxel_resolution,
             num_threads=self.num_threads,
         )
 

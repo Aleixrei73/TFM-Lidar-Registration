@@ -78,44 +78,6 @@ def kappa_from_circular_std(sigma_deg: float) -> float:
     return brentq(mean_resultant_length, 0.0, upper)
 
 
-def add_pose_noise(
-    pose: List[float], position_noise: float, kappa: Optional[float]
-) -> List[float]:
-    """
-    Perturb a pose with Gaussian position noise and von Mises angular noise.
-
-    Parameters
-    ----------
-    pose : list of float
-        ``[x, y, z, roll, yaw, pitch]``, positions in meters and angles in
-        degrees.
-    position_noise : float
-        Standard deviation, in meters, of the zero-mean Gaussian noise
-        added to x, y and z.
-    kappa : float or None
-        Precomputed von Mises concentration parameter (see
-        ``kappa_from_circular_std``) shared by roll, yaw and pitch noise.
-        ``None`` disables angular noise.
-
-    Returns
-    -------
-    list of float
-        The noisy pose, in the same ``[x, y, z, roll, yaw, pitch]`` layout.
-    """
-    x, y, z, roll, yaw, pitch = pose
-
-    x += np.random.normal(0.0, position_noise)
-    y += np.random.normal(0.0, position_noise)
-    z += np.random.normal(0.0, position_noise)
-
-    if kappa is not None:
-        roll += np.degrees(np.random.vonmises(0.0, kappa))
-        yaw += np.degrees(np.random.vonmises(0.0, kappa))
-        pitch += np.degrees(np.random.vonmises(0.0, kappa))
-
-    return [x, y, z, roll, yaw, pitch]
-
-
 def build_pairs(root_dir: str) -> List[PairEntry]:
     """
     Build all infrastructure-vehicle agent pairs sharing a timestamp.
@@ -176,7 +138,13 @@ class V2XReal(Dataset):
     """
 
     def __init__(
-        self, root_dir: str, position_noise: float = 0, angular_noise: float = 0
+        self,
+        root_dir: str,
+        noise_plane: float = 0,
+        noise_height: float = 0,
+        noise_yaw: float = 0,
+        noise_pitch: float = 0,
+        noise_roll: float = 0,
     ) -> None:
         root_dir = Path(root_dir)
         if not root_dir.exists():
@@ -185,18 +153,59 @@ class V2XReal(Dataset):
             raise NotADirectoryError(f"Not a directory: {root_dir}")
 
         self.root_dir = root_dir
-        self.position_noise = position_noise
-        self.angular_noise = angular_noise
+
+        self.noise_plane = noise_plane
+        self.noise_height = noise_height
         # Precomputed once since it only depends on angular_noise, which is
         # fixed for the dataset's lifetime.
-        self.kappa = (
-            kappa_from_circular_std(angular_noise) if angular_noise > 0 else None
+        self.kappa_yaw = kappa_from_circular_std(noise_yaw) if noise_yaw > 0 else None
+        self.kappa_pitch = (
+            kappa_from_circular_std(noise_pitch) if noise_pitch > 0 else None
         )
+        self.kappa_roll = (
+            kappa_from_circular_std(noise_roll) if noise_roll > 0 else None
+        )
+
         self.pairs = build_pairs(self.root_dir)
 
-        logger.info(
-            f"Using positional noise : {position_noise} and angular noise : {angular_noise}"
-        )
+    def add_pose_noise(self, pose: List[float]) -> List[float]:
+        """
+        Perturb a pose with Gaussian position noise and von Mises angular noise.
+
+        Parameters
+        ----------
+        pose : list of float
+            ``[x, y, z, roll, yaw, pitch]``, positions in meters and angles in
+            degrees.
+        position_noise : float
+            Standard deviation, in meters, of the zero-mean Gaussian noise
+            added to x, y and z.
+        kappa : float or None
+            Precomputed von Mises concentration parameter (see
+            ``kappa_from_circular_std``) shared by roll, yaw and pitch noise.
+            ``None`` disables angular noise.
+
+        Returns
+        -------
+        list of float
+            The noisy pose, in the same ``[x, y, z, roll, yaw, pitch]`` layout.
+        """
+        x, y, z, roll, yaw, pitch = pose
+
+        if self.noise_plane > 0:
+            x = x + np.random.normal(0.0, self.noise_plane)
+            y = y + np.random.normal(0.0, self.noise_plane)
+        if self.noise_height > 0:
+            z = z + np.random.normal(0.0, self.noise_height)
+
+        if self.kappa_roll is not None:
+            roll = roll + np.degrees(np.random.vonmises(0.0, self.kappa_roll))
+        if self.kappa_yaw is not None:
+            yaw = yaw + np.degrees(np.random.vonmises(0.0, self.kappa_yaw))
+        if self.kappa_pitch is not None:
+            pitch = pitch + np.degrees(np.random.vonmises(0.0, self.kappa_pitch))
+
+        return [x, y, z, roll, yaw, pitch]
 
     def __getitem__(self, idx: int) -> Dict:
         """
@@ -223,9 +232,7 @@ class V2XReal(Dataset):
 
         infra_imu_pose = load_yaml(infra_dir / f"{infra_ts}.yaml")["lidar_pose"]
         vehicle_imu_pose = load_yaml(vehicle_dir / f"{vehicle_ts}.yaml")["lidar_pose"]
-        vehicle_imu_pose = add_pose_noise(
-            vehicle_imu_pose, self.position_noise, self.kappa
-        )
+        vehicle_imu_pose = self.add_pose_noise(vehicle_imu_pose)
 
         infra_true_pose = load_yaml(infra_dir / f"{infra_ts}.yaml")["true_ego_pose"]
         vehicle_true_pose = load_yaml(vehicle_dir / f"{vehicle_ts}.yaml")[

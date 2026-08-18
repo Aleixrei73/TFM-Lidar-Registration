@@ -25,5 +25,5 @@ __all__ = [
     "VGICPPlaneRemoved",
     "VGICPPlaneRemovedInit",
     "VGICPPlaneRemovedMatch",
-    "VGICPGrid"
+    "VGICPGrid",
 ]

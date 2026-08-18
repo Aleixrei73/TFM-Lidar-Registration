@@ -67,6 +67,19 @@ class ExperimentPipeline:
             registered transform instead of its own IMU-derived transform,
             except on samples with `meta["is_first_frame"]` True, which
             always use their own IMU-derived transform.
+            May contain an `"overlap"` key (default 0.0), a float in
+            [0, 1]. When set together with `"use_previous"`, `evaluate`
+            and `evaluate_single` skip any sample whose overlap ratio
+            does not exceed this threshold (reporting only its overlap
+            ratio), and the first sample exceeding it after such a gap
+            is treated as a first frame: its own IMU-derived transform
+            is used as the initial guess regardless of
+            `meta["is_first_frame"]`, and its metrics are marked with
+            `"first_frame": True`. In this mode, `meta["is_first_frame"]`
+            is instead used only to detect a scene change, which is
+            accounted for the same way (own IMU-derived transform and
+            `"first_frame": True`) instead of reusing the previous
+            sample's registered transform.
         """
         self.method = method
         self.dataset = dataset
@@ -74,7 +87,9 @@ class ExperimentPipeline:
         self.config = config
         self.output_path = Path(config["output_path"])
         self.use_previous = config.get("use_previous", False)
+        self.overlap = config.get("overlap", 0.0)
         self._previous_transform: np.ndarray | None = None
+        self._awaiting_first_frame: bool = True
 
     def _resolve_transform_imu(self, sample: dict) -> np.ndarray:
         """Get the initial transform guess for a sample.
@@ -96,8 +111,47 @@ class ExperimentPipeline:
 
         return sample["T_infra_to_vehicle_imu"].numpy()
 
+    def _resolve_transform_imu_for_evaluation(self, sample: dict) -> tuple[np.ndarray, bool]:
+        """Get the initial transform guess for a sample during `evaluate`,
+        accounting for overlap-based first-frame selection.
+
+        Only used when `self.use_previous` is True; a sample becomes a
+        first frame either because it is the first to exceed
+        `self.overlap` after a gap of skipped samples, or because
+        `meta["is_first_frame"]` marks a scene change. Either case is
+        accounted for the same way: the sample's own IMU-derived
+        transform is used as the initial guess, disregarding the
+        previous sample's registered transform.
+
+        Parameters
+        ----------
+        sample : dict
+            Dataset item, as returned by `self.dataset[idx]`.
+
+        Returns
+        -------
+        tuple[np.ndarray, bool]
+            The initial transform guess, and whether this sample is a
+            first frame.
+        """
+        if not self.use_previous:
+            return self._resolve_transform_imu(sample), False
+
+        if self._awaiting_first_frame or sample["meta"]["is_first_frame"]:
+            self._awaiting_first_frame = False
+            return sample["T_infra_to_vehicle_imu"].numpy(), True
+
+        return self._previous_transform, False
+
     def evaluate_single(self, idx: int) -> dict[str, float]:
         """Register a single dataset sample and compute all metrics on it.
+
+        When `self.use_previous` is True and `self.overlap` is set, a
+        sample whose overlap ratio does not exceed `self.overlap` is
+        skipped: registration and the other metrics are not computed,
+        and only `"overlap_ratio"` is reported. The next sample to
+        exceed the threshold becomes a first frame, reported with
+        `"first_frame": True` (see `_resolve_transform_imu_for_evaluation`).
 
         Parameters
         ----------
@@ -108,13 +162,28 @@ class ExperimentPipeline:
         -------
         dict[str, float]
             Mapping from metric name to its computed value, merged across
-            all metrics in `self.metrics`.
+            all metrics in `self.metrics`. Just `{"overlap_ratio": ...}`
+            for a skipped sample.
         """
         sample = self.dataset[idx]
         infra_pts = sample["infra_pts"].numpy()
         vehicle_pts = sample["vehicle_pts"].numpy()
         transform_gt = sample["T_infra_to_vehicle"].numpy()
-        transform_imu = self._resolve_transform_imu(sample)
+
+        # Overlap is a property of the ground-truth alignment, not the
+        # registration method, so it is computed once per sample here.
+        overlap_ratio = compute_overlap_ratio(
+            source=infra_pts,
+            target=vehicle_pts,
+            transformation=transform_gt,
+            threshold=self.config["overlap_threshold"],
+        )
+
+        if self.use_previous and overlap_ratio <= self.overlap:
+            self._awaiting_first_frame = True
+            return {"overlap_ratio": overlap_ratio}
+
+        transform_imu, is_first_frame = self._resolve_transform_imu_for_evaluation(sample)
 
         registered_cloud, transform = self.method.register(
             infra_pts, vehicle_pts, transform_imu=transform_imu
@@ -133,14 +202,10 @@ class ExperimentPipeline:
         for metric in self.metrics:
             results.update(metric.compute(**inputs))
 
-        # Overlap is a property of the ground-truth alignment, not the
-        # registration method, so it is computed once per sample here.
-        results["overlap_ratio"] = compute_overlap_ratio(
-            source=infra_pts,
-            target=vehicle_pts,
-            transformation=transform_gt,
-            threshold=self.config["overlap_threshold"],
-        )
+        results["overlap_ratio"] = overlap_ratio
+        if is_first_frame:
+            results["first_frame"] = True
+
         return results
 
     def inference(
@@ -218,6 +283,7 @@ class ExperimentPipeline:
         logger.info("Starting evaluation over %d samples", len(self.dataset))
         checkpoint_every = self.config.get("checkpoint_every", 10)
         self._previous_transform = None
+        self._awaiting_first_frame = True
 
         # Since the path is sanitized and created on instantiation, this is not needed
         # self.output_path.mkdir(parents=True, exist_ok=True)
@@ -284,6 +350,10 @@ class ExperimentPipeline:
         """Compute the mean and standard deviation of each metric across
         all samples.
 
+        Samples skipped for insufficient overlap (reporting only
+        `"overlap_ratio"`) are excluded from aggregation entirely, and
+        `"first_frame"` is never aggregated.
+
         Parameters
         ----------
         per_sample : dict[str, dict[str, float]]
@@ -294,13 +364,18 @@ class ExperimentPipeline:
         dict[str, dict[str, float]]
             Mapping from metric name to a `{"mean": ..., "std": ...}` dict.
         """
-        metric_names = {name for sample in per_sample.values() for name in sample}
+        registered_samples = [
+            sample for sample in per_sample.values() if sample.keys() != {"overlap_ratio"}
+        ]
+        metric_names = {
+            name for sample in registered_samples for name in sample if name != "first_frame"
+        }
 
         aggregate: dict[str, dict[str, float]] = {}
         for name in metric_names:
             # Not every sample is guaranteed to report every metric name.
             values = np.array(
-                [sample[name] for sample in per_sample.values() if name in sample]
+                [sample[name] for sample in registered_samples if name in sample]
             )
             aggregate[name] = {"mean": float(values.mean()), "std": float(values.std())}
         return aggregate
