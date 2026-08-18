@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -80,6 +81,14 @@ class ExperimentPipeline:
             accounted for the same way (own IMU-derived transform and
             `"first_frame": True`) instead of reusing the previous
             sample's registered transform.
+            May contain an `"order"` key (default 0), either 0 or 1. If
+            1, once two consecutive registered transforms are available
+            for the current first-frame chain, the initial guess that
+            would otherwise be the previous sample's registered
+            transform is instead an order-1 (constant-velocity)
+            extrapolation from the previous two registered transforms.
+            The chain of two transforms resets whenever a new first
+            frame is reached.
         """
         self.method = method
         self.dataset = dataset
@@ -88,11 +97,17 @@ class ExperimentPipeline:
         self.output_path = Path(config["output_path"])
         self.use_previous = config.get("use_previous", False)
         self.overlap = config.get("overlap", 0.0)
+        self.order = config.get("order", 0)
         self._previous_transform: np.ndarray | None = None
+        self._transform_queue: deque[np.ndarray] = deque(maxlen=2)
         self._awaiting_first_frame: bool = True
 
     def _resolve_transform_imu(self, sample: dict) -> np.ndarray:
         """Get the initial transform guess for a sample.
+
+        Used by `inference`, and as the fallback of
+        `_resolve_transform_imu_for_evaluation` when `self.use_previous`
+        is False.
 
         Parameters
         ----------
@@ -102,18 +117,55 @@ class ExperimentPipeline:
         Returns
         -------
         np.ndarray
-            `self._previous_transform` when `self.use_previous` is True
-            and the sample is not a first frame; the sample's own
-            IMU-derived transform otherwise.
+            When `self.use_previous` is True and the sample is not a
+            first frame: an order-1 extrapolation from the previous two
+            registered transforms if `self.order` is 1 and both are
+            available, otherwise `self._previous_transform`. The
+            sample's own IMU-derived transform otherwise, which also
+            resets the order-1 queue.
         """
         if self.use_previous and not sample["meta"]["is_first_frame"]:
+            if self.order == 1 and len(self._transform_queue) == 2:
+                return self._extrapolate_transform(self._transform_queue)
             return self._previous_transform
 
+        if self.order == 1:
+            self._transform_queue.clear()
         return sample["T_infra_to_vehicle_imu"].numpy()
+
+    @staticmethod
+    def _extrapolate_transform(queue: deque[np.ndarray]) -> np.ndarray:
+        """Order-1 (constant-velocity) extrapolation from the previous
+        two registered transforms.
+
+        Parameters
+        ----------
+        queue : deque[np.ndarray]
+            The previous two registered 4x4 transforms, oldest first.
+
+        Returns
+        -------
+        np.ndarray
+            The predicted 4x4 transform, continuing the translation and
+            rotation deltas between the two queued transforms by one
+            more step.
+        """
+        transform_prev2, transform_prev1 = queue
+        rotation_prev2, translation_prev2 = transform_prev2[:3, :3], transform_prev2[:3, 3]
+        rotation_prev1, translation_prev1 = transform_prev1[:3, :3], transform_prev1[:3, 3]
+
+        delta_translation = translation_prev1 - translation_prev2
+        delta_rotation = rotation_prev2.T @ rotation_prev1
+
+        predicted = np.eye(4)
+        predicted[:3, :3] = rotation_prev1 @ delta_rotation
+        predicted[:3, 3] = translation_prev1 + delta_translation
+        return predicted
 
     def _resolve_transform_imu_for_evaluation(self, sample: dict) -> tuple[np.ndarray, bool]:
         """Get the initial transform guess for a sample during `evaluate`,
-        accounting for overlap-based first-frame selection.
+        accounting for overlap-based first-frame selection and order-1
+        extrapolation.
 
         Only used when `self.use_previous` is True; a sample becomes a
         first frame either because it is the first to exceed
@@ -121,7 +173,12 @@ class ExperimentPipeline:
         `meta["is_first_frame"]` marks a scene change. Either case is
         accounted for the same way: the sample's own IMU-derived
         transform is used as the initial guess, disregarding the
-        previous sample's registered transform.
+        previous sample's registered transform, and the order-1 queue
+        is reset since it no longer applies to the new chain.
+
+        When continuing a chain and `self.order` is 1, the initial
+        guess is instead an order-1 extrapolation from the previous two
+        registered transforms, once both are available.
 
         Parameters
         ----------
@@ -139,7 +196,12 @@ class ExperimentPipeline:
 
         if self._awaiting_first_frame or sample["meta"]["is_first_frame"]:
             self._awaiting_first_frame = False
+            if self.order == 1:
+                self._transform_queue.clear()
             return sample["T_infra_to_vehicle_imu"].numpy(), True
+
+        if self.order == 1 and len(self._transform_queue) == 2:
+            return self._extrapolate_transform(self._transform_queue), False
 
         return self._previous_transform, False
 
@@ -189,6 +251,8 @@ class ExperimentPipeline:
             infra_pts, vehicle_pts, transform_imu=transform_imu
         )
         self._previous_transform = transform
+        if self.order == 1:
+            self._transform_queue.append(transform)
 
         inputs = {
             "infra_pts": infra_pts,
@@ -215,6 +279,11 @@ class ExperimentPipeline:
     ) -> np.ndarray | list[np.ndarray]:
         """Run registration on the requested samples without computing metrics.
 
+        Follows `self.use_previous` and `self.order` the same way as
+        `evaluate` (see `_resolve_transform_imu`), using scene changes
+        (`meta["is_first_frame"]`) as the only first-frame signal, since
+        there is no overlap-based skipping here.
+
         Parameters
         ----------
         idx : int | list[int] | Literal["all"]
@@ -235,6 +304,7 @@ class ExperimentPipeline:
             indices.
         """
         self._previous_transform = None
+        self._transform_queue.clear()
 
         single = isinstance(idx, int)
         if idx == "all":
@@ -254,6 +324,8 @@ class ExperimentPipeline:
                 infra_pts, vehicle_pts, transform_imu=transform_imu
             )
             self._previous_transform = transform
+            if self.order == 1:
+                self._transform_queue.append(transform)
             transforms.append(transform)
 
         if save_transform:
@@ -283,6 +355,7 @@ class ExperimentPipeline:
         logger.info("Starting evaluation over %d samples", len(self.dataset))
         checkpoint_every = self.config.get("checkpoint_every", 10)
         self._previous_transform = None
+        self._transform_queue.clear()
         self._awaiting_first_frame = True
 
         # Since the path is sanitized and created on instantiation, this is not needed
