@@ -8,6 +8,7 @@ runs one of the pipeline's operations on it.
 from __future__ import annotations
 
 import logging
+import random
 import sys
 import uuid
 from pathlib import Path
@@ -15,6 +16,7 @@ from typing import Any, Literal
 
 import click
 import numpy as np
+import torch
 
 from pipeline import ExperimentPipeline
 from ros_utils.rosbags_creator import create_rosbag as write_rosbag
@@ -130,6 +132,12 @@ def evaluate(config_path: Path) -> None:
     config_path : Path
         Path to the YAML configuration file describing the run.
     """
+    # Ensure reproducible evaluation runs.
+    random.seed(0)
+    np.random.seed(0)
+    torch.manual_seed(0)
+    torch.cuda.manual_seed_all(0)
+
     config = load_config(config_path)
     _prepare_output_dir(config)
     pipeline = build_pipeline(config)

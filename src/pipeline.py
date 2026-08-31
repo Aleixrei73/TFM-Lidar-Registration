@@ -146,23 +146,27 @@ class ExperimentPipeline:
         Returns
         -------
         np.ndarray
-            The predicted 4x4 transform, continuing the translation and
-            rotation deltas between the two queued transforms by one
-            more step.
+            The predicted 4x4 transform, continuing the translation delta
+            between the two queued transforms by one more step and
+            keeping the most recent rotation unchanged.
         """
         transform_prev2, transform_prev1 = queue
-        rotation_prev2, translation_prev2 = transform_prev2[:3, :3], transform_prev2[:3, 3]
-        rotation_prev1, translation_prev1 = transform_prev1[:3, :3], transform_prev1[:3, 3]
+        translation_prev2 = transform_prev2[:3, 3]
+        rotation_prev1, translation_prev1 = (
+            transform_prev1[:3, :3],
+            transform_prev1[:3, 3],
+        )
 
         delta_translation = translation_prev1 - translation_prev2
-        delta_rotation = rotation_prev2.T @ rotation_prev1
 
         predicted = np.eye(4)
-        predicted[:3, :3] = rotation_prev1 @ delta_rotation
+        predicted[:3, :3] = rotation_prev1
         predicted[:3, 3] = translation_prev1 + delta_translation
         return predicted
 
-    def _resolve_transform_imu_for_evaluation(self, sample: dict) -> tuple[np.ndarray, bool]:
+    def _resolve_transform_imu_for_evaluation(
+        self, sample: dict
+    ) -> tuple[np.ndarray, bool]:
         """Get the initial transform guess for a sample during `evaluate`,
         accounting for overlap-based first-frame selection and order-1
         extrapolation.
@@ -245,7 +249,9 @@ class ExperimentPipeline:
             self._awaiting_first_frame = True
             return {"overlap_ratio": overlap_ratio}
 
-        transform_imu, is_first_frame = self._resolve_transform_imu_for_evaluation(sample)
+        transform_imu, is_first_frame = self._resolve_transform_imu_for_evaluation(
+            sample
+        )
 
         registered_cloud, transform = self.method.register(
             infra_pts, vehicle_pts, transform_imu=transform_imu
@@ -438,10 +444,15 @@ class ExperimentPipeline:
             Mapping from metric name to a `{"mean": ..., "std": ...}` dict.
         """
         registered_samples = [
-            sample for sample in per_sample.values() if sample.keys() != {"overlap_ratio"}
+            sample
+            for sample in per_sample.values()
+            if sample.keys() != {"overlap_ratio"}
         ]
         metric_names = {
-            name for sample in registered_samples for name in sample if name != "first_frame"
+            name
+            for sample in registered_samples
+            for name in sample
+            if name != "first_frame"
         }
 
         aggregate: dict[str, dict[str, float]] = {}

@@ -16,7 +16,7 @@ from typing import Any
 import yaml
 from torch.utils.data import Dataset
 
-from datasets import Beamagine, V2XReal
+from datasets import Beamagine, V2XReal, V2XRealSameVehicle
 from metrics import Metric, PointBasedMetric
 from registration import (
     VGICP,
@@ -51,7 +51,11 @@ _METHODS: dict[str, type[RegistrationMethod]] = {
     "identity": IdentityMethod,
 }
 _METRICS: dict[str, type[Metric]] = {"point_based": PointBasedMetric}
-_DATASETS: dict[str, type[Dataset]] = {"v2x_real": V2XReal, "beamagine": Beamagine}
+_DATASETS: dict[str, type[Dataset]] = {
+    "v2x_real": V2XReal,
+    "v2x_real_same_vehicle": V2XRealSameVehicle,
+    "beamagine": Beamagine,
+}
 
 _REQUIRED_TOP_LEVEL_KEYS = (
     "output_path",

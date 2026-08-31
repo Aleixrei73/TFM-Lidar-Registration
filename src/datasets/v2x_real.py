@@ -127,6 +127,10 @@ def build_pairs(root_dir: str) -> List[PairEntry]:
     return pairs
 
 
+#: Dataset split folder names, excluding the "all" pseudo-split.
+_SPLIT_DIRNAMES = ("train", "val", "test")
+
+
 class V2XReal(Dataset):
     """
     PyTorch Dataset for point cloud registration on V2X-Real.
@@ -134,18 +138,30 @@ class V2XReal(Dataset):
     Parameters
     ----------
     root_dir : str
-        Path to a dataset split folder (e.g. ``v2xreal/train``).
+        Path to the dataset root (e.g. ``v2xreal``), containing the
+        ``train``, ``val`` and ``test`` split folders.
+    split : str, default "all"
+        Which split to load: ``"train"``, ``"val"``, ``"test"`` or
+        ``"all"``. ``"all"`` concatenates pairs from all three splits,
+        in ``train``, ``val``, ``test`` order.
     """
 
     def __init__(
         self,
         root_dir: str,
+        split: str = "all",
         noise_plane: float = 0,
         noise_height: float = 0,
         noise_yaw: float = 0,
         noise_pitch: float = 0,
         noise_roll: float = 0,
     ) -> None:
+        if split not in ("all", *_SPLIT_DIRNAMES):
+            raise ValueError(
+                f"Invalid split '{split}', expected one of "
+                f"{('all', *_SPLIT_DIRNAMES)}"
+            )
+
         root_dir = Path(root_dir)
         if not root_dir.exists():
             raise FileNotFoundError(f"Directory not found: {root_dir}")
@@ -153,6 +169,7 @@ class V2XReal(Dataset):
             raise NotADirectoryError(f"Not a directory: {root_dir}")
 
         self.root_dir = root_dir
+        self.split = split
 
         self.noise_plane = noise_plane
         self.noise_height = noise_height
@@ -166,7 +183,15 @@ class V2XReal(Dataset):
             kappa_from_circular_std(noise_roll) if noise_roll > 0 else None
         )
 
-        self.pairs = build_pairs(self.root_dir)
+        split_dirnames = _SPLIT_DIRNAMES if split == "all" else (split,)
+        self.pairs = []
+        for split_dirname in split_dirnames:
+            split_dir = self.root_dir / split_dirname
+            if not split_dir.exists():
+                raise FileNotFoundError(f"Directory not found: {split_dir}")
+            if not split_dir.is_dir():
+                raise NotADirectoryError(f"Not a directory: {split_dir}")
+            self.pairs.extend(build_pairs(split_dir))
 
     def add_pose_noise(self, pose: List[float]) -> List[float]:
         """
