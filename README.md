@@ -133,16 +133,6 @@ python src/main.py inference \
   --save-transform
 ```
 
-### `visualize-single`
-
-Runs registration on a single sample and opens an Open3D window showing
-the point clouds before and after alignment. The resulting transform is
-not saved to disk:
-
-```bash
-python src/main.py visualize-single --config-path configs/template.yaml --index 0
-```
-
 ### `create-rosbag`
 
 Writes a ROS1 `.bag` file (via the pure-Python `rosbags` library, no
