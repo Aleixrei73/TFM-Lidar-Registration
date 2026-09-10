@@ -1,3 +1,0 @@
-- No initial pose given leads to bad registration results -> vgicp/*
-- Initial pose is too good (basically ground truth) on v2x-real -> identity/*
-- VGICP applies perturbations to ground truths and does not keep it correct -> vgicp-128-imu/*

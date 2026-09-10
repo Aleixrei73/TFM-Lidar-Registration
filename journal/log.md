@@ -1,5 +1,0 @@
-### 06/07/2026
-It's clear V2X-Real does not work for registration if we want to have an IMU-based initialization first, since it does not provide it. The lidar_pose given is almost the same as the ground truth, so I should use another thing.
-
-### 18/07/2026
-The registration for the EWOC points are still really bad, even after correcting the scale. In any case, it may not be the inicialization since the KISS_MATCHER also gives really bad results, and it does not use the inicialization at all. Even with high overlapping, the registration is really bad. In this case, it may seem that using the camera-enabled registration (at least as a first registration to later improve) maybe be way better, since it is still really bad. We will compare with the noisy application of the vgicp on v2x-real to see how expected this results are, but from initial results it may seem that it is quite normal for that to happen.
