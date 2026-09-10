@@ -97,6 +97,36 @@ SENSOR_TO_BODY_ROTATION = np.array(
     ]
 )
 
+# Manually surveyed/measured car-to-fixed transform for a scene's first
+# sample pair, overriding the GPS-derived estimate. Keyed by scene_number;
+# scenes without an entry keep the computed transform.
+FIRST_FRAME_TRANSFORM_OVERRIDES: Dict[int, np.ndarray] = {
+    1: np.array(
+        [
+            [-0.065762, 0.144425, -0.987328, 7.520866],
+            [-0.052275, 0.987613, 0.147948, -1.658361],
+            [0.996465, 0.061342, -0.057398, 16.663637],
+            [0.000000, 0.000000, 0.000000, 1.000000],
+        ]
+    ),
+    6: np.array(
+        [
+            [0.946479, -0.016063, -0.322366, 9.067900],
+            [-0.017539, 0.994726, -0.101060, 2.569618],
+            [0.322289, 0.101305, 0.941205, -8.649558],
+            [0.000000, 0.000000, 0.000000, 1.000000],
+        ]
+    ),
+}
+
+# Minimum car-sample timestamp (ms) from which a scene's sample pairs should
+# start. Earlier pairs are dropped. Keyed by scene_number; scenes without an
+# entry keep all pairs.
+MIN_TIMESTAMP_OVERRIDES: Dict[int, int] = {
+    1: 1781617190864,
+    6: 1781618431494,
+}
+
 
 class Beamagine(Dataset):
     """
@@ -302,6 +332,12 @@ class Beamagine(Dataset):
             else:
                 fixed, behind = new_fixed, next_behind
 
+        min_timestamp = MIN_TIMESTAMP_OVERRIDES.get(self.scene_number)
+        if min_timestamp is not None:
+            pairs = [
+                (car, infra) for car, infra in pairs if car["timestamp"] >= min_timestamp
+            ]
+
         return pairs
 
     @staticmethod
@@ -455,29 +491,35 @@ class Beamagine(Dataset):
         body_to_sensor = np.eye(4)
         body_to_sensor[:3, :3] = SENSOR_TO_BODY_ROTATION.T
 
-        for car_sample, infra_sample in self.sample_pairs:
-            car_x, car_y, car_z = gps_to_enu(
-                car_sample["lat_deg"],
-                car_sample["lon_deg"],
-                car_sample["alt_m"],
-                INFRA_LAT_DEG,
-                INFRA_LON_DEG,
-                INFRA_ALT_M,
-            )
+        first_frame_override = FIRST_FRAME_TRANSFORM_OVERRIDES.get(self.scene_number)
 
-            car_yaw = heading_to_yaw(car_sample["yaw_deg"])
-            car_to_world = pose_to_matrix(
-                car_x,
-                car_y,
-                car_z,
-                car_sample["roll_deg"],
-                car_sample["pitch_deg"],
-                car_yaw,
-            )
+        for i, (car_sample, infra_sample) in enumerate(self.sample_pairs):
+            if i == 0 and first_frame_override is not None:
+                car_to_fixed = first_frame_override
+            else:
+                car_x, car_y, car_z = gps_to_enu(
+                    car_sample["lat_deg"],
+                    car_sample["lon_deg"],
+                    car_sample["alt_m"],
+                    INFRA_LAT_DEG,
+                    INFRA_LON_DEG,
+                    INFRA_ALT_M,
+                )
 
-            car_to_fixed = (
-                body_to_sensor @ world_to_infra @ car_to_world @ sensor_to_body
-            )
+                car_yaw = heading_to_yaw(car_sample["yaw_deg"])
+                car_to_world = pose_to_matrix(
+                    car_x,
+                    car_y,
+                    car_z,
+                    car_sample["roll_deg"],
+                    car_sample["pitch_deg"],
+                    car_yaw,
+                )
+
+                car_to_fixed = (
+                    body_to_sensor @ world_to_infra @ car_to_world @ sensor_to_body
+                )
+
             fixed_to_car = np.linalg.inv(car_to_fixed)
 
             car_sample["T_car_to_fixed"] = car_to_fixed

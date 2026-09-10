@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -228,8 +229,9 @@ class ExperimentPipeline:
         -------
         dict[str, float]
             Mapping from metric name to its computed value, merged across
-            all metrics in `self.metrics`. Just `{"overlap_ratio": ...}`
-            for a skipped sample.
+            all metrics in `self.metrics`, plus `"runtime_ms"` (the
+            `self.method.register` call duration, in milliseconds). Just
+            `{"overlap_ratio": ...}` for a skipped sample.
         """
         sample = self.dataset[idx]
         infra_pts = sample["infra_pts"].numpy()
@@ -253,9 +255,12 @@ class ExperimentPipeline:
             sample
         )
 
+        start_time = time.perf_counter()
         registered_cloud, transform = self.method.register(
             infra_pts, vehicle_pts, transform_imu=transform_imu
         )
+        runtime_ms = (time.perf_counter() - start_time) * 1000.0
+
         self._previous_transform = transform
         if self.order == 1:
             self._transform_queue.append(transform)
@@ -273,6 +278,7 @@ class ExperimentPipeline:
             results.update(metric.compute(**inputs))
 
         results["overlap_ratio"] = overlap_ratio
+        results["runtime_ms"] = runtime_ms
         if is_first_frame:
             results["first_frame"] = True
 

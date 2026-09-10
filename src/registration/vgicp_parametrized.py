@@ -24,7 +24,8 @@ class VGICPParam(RegistrationMethod):
         self,
         voxel_size: float,
         num_threads: int = 4,
-        voxel_resolution: float = 4.0,
+        voxel_resolution: float = 1,
+        max_correspondence_distance : float = 1,
         use_initialization: bool = False,
     ) -> None:
         """Store the voxel resolution used for downsampling and registration.
@@ -41,7 +42,8 @@ class VGICPParam(RegistrationMethod):
         """
         self.voxel_size = voxel_size
         self.num_threads = num_threads
-        self.voxel_resolution = voxel_size * voxel_resolution
+        self.voxel_resolution = voxel_resolution
+        self.max_correspondence_distance = max_correspondence_distance
         self.use_initialization = use_initialization
 
     def fit(self, source: PointCloud, target: PointCloud, **kwargs) -> Transform:
@@ -75,6 +77,7 @@ class VGICPParam(RegistrationMethod):
             registration_type="VGICP",
             downsampling_resolution=self.voxel_size,
             voxel_resolution=self.voxel_resolution,
+            max_correspondence_distance=self.max_correspondence_distance,
             num_threads=self.num_threads,
         )
 

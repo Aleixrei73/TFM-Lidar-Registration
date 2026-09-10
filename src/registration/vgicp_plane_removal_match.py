@@ -25,7 +25,6 @@ class VGICPPlaneRemovedMatch(RegistrationMethod):
         self,
         voxel_size: float,
         num_threads: int = 4,
-        voxel_resolution: float = 4.0,
         use_initialization: bool = False,
     ) -> None:
         """Store the voxel resolution used for downsampling and registration.
@@ -42,7 +41,7 @@ class VGICPPlaneRemovedMatch(RegistrationMethod):
         """
         self.voxel_size = voxel_size
         self.num_threads = num_threads
-        self.voxel_resolution = voxel_size * voxel_resolution
+        self.voxel_resolution = 1.2
         self.use_initialization = use_initialization
 
     def fit(self, source: PointCloud, target: PointCloud, **kwargs) -> Transform:

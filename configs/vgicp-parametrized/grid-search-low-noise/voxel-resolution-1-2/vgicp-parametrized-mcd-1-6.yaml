@@ -1,0 +1,29 @@
+output_path: experiments/vgicp-128-parametrized
+transforms_path: /mnt/work/users/aleix.armero/transforms/vgicp-128-imu.npy
+overlap_threshold: 1.0
+checkpoint_every : 100
+
+registration_method:
+  name: vgicp-param
+  params: {
+    voxel_size : 0.2,
+    voxel_resolution : 1.2,
+    max_correspondence_distance : 1.6,
+    num_threads : 4,
+    use_initialization: true
+    }          # forwarded as **kwargs to load_method
+
+dataset:
+  name: v2x_real
+  params:            # forwarded as **kwargs to load_dataset
+    root_dir : /mnt/work/datasets/V2X-Real/V2X-Real-Lidar-128
+    split : 'train'
+    noise_yaw : 1
+    noise_plane : 1
+    
+metrics:
+  - name: point_based
+    params: {
+      rte_threshold : 0.2,
+      rre_threshold : 0.2
+    }

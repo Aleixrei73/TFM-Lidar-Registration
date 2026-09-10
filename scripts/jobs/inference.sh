@@ -2,6 +2,7 @@
 #SBATCH --job-name=inference
 #SBATCH --partition=gpi.compute
 #SBATCH --cpus-per-task=4
+#SBATCH --nodelist=gpic16
 #SBATCH --mem=64G
 #SBATCH --time=08:00:00
 #SBATCH --output=experiments/logs/%x_%j.out

@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=create_rosbag
 #SBATCH --partition=gpi.compute
+#SBATCH --nodelist=gpic16
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
 #SBATCH --time=08:00:00

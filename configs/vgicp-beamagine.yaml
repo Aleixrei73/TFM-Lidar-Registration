@@ -2,17 +2,23 @@ output_path: experiments/identity
 transforms_path: /mnt/work/users/aleix.armero/transforms/vgipc-beamagine.npy
 overlap_threshold: 1.0
 checkpoint_every : 100
+use_previous: true
+order : 0
 
 registration_method:
   name: vgicp
-  params: {voxel_size : 0.2, voxel_resolution : 1.0, correspondance_distance : 1, num_threads : 4}          # forwarded as **kwargs to load_method
+  params: {
+    voxel_size : 0.2,
+    num_threads : 4,
+    use_initialization: true
+    }          # forwarded as **kwargs to load_method
 
 dataset:
   name: beamagine
   params:            # forwarded as **kwargs to load_dataset
     root_dir : /mnt/work/datasets/V2X-Real/CROWDSOURCED_EWOC_20260616_dataset
     json_folder: v0.2
-    scene_number: 1
+    scene_number: 6
     
 metrics:
   - name: point_based
