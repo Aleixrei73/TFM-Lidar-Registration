@@ -10,6 +10,8 @@ a set of metrics, and persists per-sample and aggregate results. Runs
 are driven entirely by YAML configuration files, so new methods,
 datasets, and metrics can be compared without touching the CLI.
 
+You can find the thesis document [here](TFM.pdf).
+
 ## Overview
 
 - **Registration methods** (`src/registration/`): a common
