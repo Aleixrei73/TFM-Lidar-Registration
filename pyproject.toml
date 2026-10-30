@@ -10,19 +10,24 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "torch",
-    "matplotlib",
-    "seaborn",
     "scipy",
     "open3d",
     "pyyaml",
     "click",
     "tqdm",
-    "small_gicp",
-    "kiss-matcher",
     "rosbags"
 ]
 
 [project.optional-dependencies]
+# Not on PyPI in all environments, see the README installation section
+registration = [
+    "small_gicp",
+    "kiss-matcher"
+]
+plots = [
+    "matplotlib",
+    "seaborn"
+]
 dev = [
     "pytest",
     "ruff"
@@ -31,6 +36,8 @@ dev = [
 [tool.setuptools]
 package-dir = {"" = "src"}
 packages = ["datasets", "metrics", "registration", "ros_utils", "utils"]
+# Top-level modules imported by the CLI (`from pipeline import ...`)
+py-modules = ["main", "pipeline"]
 
 [tool.pytest.ini_options]
 testpaths = ["test"]
@@ -38,10 +45,10 @@ testpaths = ["test"]
 [tool.ruff]
 line-length = 88
 target-version = "py310"
-src = ["src", "tests", "scripts"]
+src = ["src", "test", "scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]
+"test/*" = ["S101"]

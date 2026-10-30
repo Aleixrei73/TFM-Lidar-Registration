@@ -24,15 +24,17 @@ You can find the thesis document [here](TFM.pdf).
 - **Datasets** (`src/datasets/`): PyTorch `Dataset` loaders for
   V2X-Real (infrastructure/vehicle pairs, or same-vehicle
   frame-to-frame pairs, with optional synthetic pose noise) and for the
-  Beamagine crowdsourced dataset, each yielding point clouds plus an
+  Beamagine crowdsourced dataset (`beamagine` and `beamagine_v2`), each yielding point clouds plus an
   IMU/GPS-derived initial transform and the ground-truth transform.
 - **Metrics** (`src/metrics/`): a `Metric` interface, currently
   implemented by point-based Relative Rotation Error (RRE) and
   Relative Translation Error (RTE).
 - **Pipeline** (`src/pipeline.py`): `ExperimentPipeline` ties a method,
   dataset, and metrics together, with optional overlap-based sample
-  skipping and constant-velocity (order-1) extrapolation of the initial
-  transform guess across a sequence.
+  skipping and sequence tracking of the initial transform guess
+  (previous-transform chaining, constant-velocity extrapolation, or
+  frame-to-frame composition), see
+  [Sequence-tracking options](#sequence-tracking-options).
 - **CLI** (`src/main.py`): `evaluate`, `inference`,
   `visualize-single`, and `create-rosbag` commands, see [Usage](#usage).
 - **Scripts** (`scripts/`): grid-search config generation, sweep-status
@@ -53,14 +55,15 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-For running tests and linting, install the development extras instead:
+Optional extras can be added in brackets, e.g. `pip install -e ".[plots]"`:
 
-```bash
-pip install -e ".[dev]"
-```
+- `plots`: `matplotlib` and `seaborn`.
+- `registration`: `small_gicp` and `kiss-matcher`, if they can be
+  resolved from your package index (see below).
+- `dev`: `pytest` and `ruff`, for running tests and linting.
 
 Two registration dependencies are not on PyPI and must be installed
-separately:
+separately otherwise:
 
 - **small_gicp** (used by every VGICP variant): follow the
   [small_gicp installation guide](https://github.com/koide3/small_gicp).
@@ -79,6 +82,9 @@ output_path: experiments/my_run
 transforms_path: transforms/my_run.npy
 overlap_threshold: 1.0
 checkpoint_every: 100    # optional, default 10
+use_previous: false      # optional, default false
+overlap: 0.0             # optional, default 0.0, only used with use_previous
+order: 0                 # optional, default 0; one of -2, -1, 0, 1
 
 registration_method:
   name: identity          # identity | kiss_matcher | vgicp | vgicp-param |
@@ -88,7 +94,8 @@ registration_method:
   params: {}               # forwarded as **kwargs to load_method
 
 dataset:
-  name: v2x_real            # v2x_real | v2x_real_same_vehicle | beamagine
+  name: v2x_real            # v2x_real | v2x_real_same_vehicle | beamagine |
+                            # beamagine_v2
   params:                   # forwarded as **kwargs to load_dataset
     root_dir: /path/to/V2X-Real-Lidar-128/train
 
@@ -102,10 +109,41 @@ metrics:
 `output_path`, `transforms_path`, `overlap_threshold`,
 `registration_method`, `dataset`, and `metrics` are all required; each
 `registration_method`/`dataset`/metric entry must have a `name` and a
-`params` mapping (use `{}` for no parameters). See
+`params` mapping (use `{}` for no parameters). `checkpoint_every`,
+`use_previous`, `overlap`, and `order` are optional. See
 [configs/](configs/) for real examples of each method/dataset
-combination, including the `use_previous`, `overlap`, and `order`
-sequence-tracking options documented on `ExperimentPipeline`.
+combination.
+
+#### Sequence-tracking options
+
+By default every sample is registered independently, starting from its
+own IMU-derived initial transform. For sequential datasets, three
+optional keys reuse the results of earlier samples instead:
+
+- `use_previous`: if `true`, the initial guess of a sample is the
+  previous sample's registered transform. Samples flagged as first
+  frames of a scene (and the first sample of each chain) always use
+  their own IMU-derived transform.
+- `overlap`: a float in `[0, 1]`, only used together with
+  `use_previous`. Samples whose overlap ratio does not exceed it are
+  skipped (only the ratio is reported), and the first sample above it
+  after such a gap starts a new chain with its own IMU-derived
+  transform, marked `"first_frame": true` in its metrics.
+- `order`: how the initial guess is built along a chain.
+
+| `order` | Requires `use_previous` | Behaviour |
+|---------|-------------------------|-----------|
+| `0` (default) | no | The previous registered transform is the initial guess. |
+| `1` | no | Constant-velocity extrapolation from the previous two registered transforms (once two are available). The history resets at each new chain. |
+| `-1` | yes | Only first frames are registered infrastructure-to-vehicle. Every other sample registers the previous vehicle cloud onto the current one, and the result is composed with the previous registered transform. |
+| `-2` | yes | Like `-1`, but the composed transform is only the initial guess for a full infrastructure-to-vehicle registration, whose output is the result. |
+
+An `order` outside `{-2, -1, 0, 1}`, or a negative `order` with
+`use_previous: false`, raises a `ValueError`. Example configs live in
+[configs/beamagine/scenes_v2/](configs/beamagine/scenes_v2/) (orders 1
+and -1) and
+[configs/beamagine/vgicp-parametrized-best-v2.yaml](configs/beamagine/vgicp-parametrized-best-v2.yaml)
+(order 0).
 
 ### `evaluate`
 

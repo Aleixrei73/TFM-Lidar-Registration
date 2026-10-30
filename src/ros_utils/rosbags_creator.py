@@ -1,8 +1,10 @@
 """
-Creates a ROS1 (.bag) file from a V2X-Real dataset, containing:
-  - /pointcloud_1  (sensor_msgs/PointCloud2)  -- infrastructure point cloud
-  - /pointcloud_2  (sensor_msgs/PointCloud2)  -- vehicle point cloud
-  - /tf            (tf2_msgs/TFMessage)       -- transform infra -> vehicle
+Creates a ROS1 (.bag) file from a registration dataset, containing:
+  - /pointcloud_1       (sensor_msgs/PointCloud2)  -- infrastructure point cloud
+  - /pointcloud_2       (sensor_msgs/PointCloud2)  -- vehicle point cloud
+  - /tf                 (tf2_msgs/TFMessage)       -- transform infra -> vehicle
+  - infrastructure_file (std_msgs/String)          -- full path of the infra file
+  - vehicle_file        (std_msgs/String)          -- full path of the vehicle file
 
 Uses the `rosbags` pure-Python library -- no ROS1/ROS2 installation needed at all.
 
@@ -18,8 +20,7 @@ import numpy as np
 from rosbags.rosbag1 import Writer
 from rosbags.typesys import Stores, get_types_from_msg, get_typestore
 from scipy.spatial.transform import Rotation
-
-from datasets.v2x_real import V2XReal
+from torch.utils.data import Dataset
 
 # ROS1_NOETIC gives message definitions matching ROS1 conventions
 # (e.g. Header still has 'seq', unlike ROS2's Header).
@@ -42,6 +43,7 @@ Transform = typestore.types["geometry_msgs/msg/Transform"]
 Vector3 = typestore.types["geometry_msgs/msg/Vector3"]
 Quaternion = typestore.types["geometry_msgs/msg/Quaternion"]
 TFMessage = typestore.types["tf2_msgs/msg/TFMessage"]
+String = typestore.types["std_msgs/msg/String"]
 
 
 def make_time(seconds: float):
@@ -92,12 +94,13 @@ def make_transform_stamped(
 def create_rosbag(
     transforms: np.ndarray,
     indices: Union[List[int], Literal["all"]],
-    dataset: V2XReal,
+    dataset: Dataset,
     bag_path: str,
     fps: float,
 ) -> None:
     """
-    Write a ROS1 bag with infra/vehicle point clouds and their transform.
+    Write a ROS1 bag with infra/vehicle point clouds, their transform and
+    the full path of the file each point cloud was read from.
 
     Parameters
     ----------
@@ -108,8 +111,9 @@ def create_rosbag(
     indices : list of int or "all"
         Dataset indices to include. If "all", every index in ``dataset``
         is used, in order.
-    dataset : V2XReal
-        Dataset to read point cloud pairs from.
+    dataset : Dataset
+        Dataset to read point cloud pairs from. Its samples must provide
+        ``meta["infra_file"]`` and ``meta["vehicle_file"]``.
     bag_path : str
         Output path for the written ``.bag`` file.
     fps : float
@@ -147,6 +151,12 @@ def create_rosbag(
         )
         conn_tf = writer.add_connection(
             "/tf", TFMessage.__msgtype__, typestore=typestore
+        )
+        conn_infra_file = writer.add_connection(
+            "infrastructure_file", String.__msgtype__, typestore=typestore
+        )
+        conn_vehicle_file = writer.add_connection(
+            "vehicle_file", String.__msgtype__, typestore=typestore
         )
 
         for i, idx in enumerate(resolved_indices):
@@ -187,3 +197,16 @@ def create_rosbag(
                 timestamp_ns,
                 typestore.serialize_ros1(tf_msg, TFMessage.__msgtype__),
             )
+
+            meta = sample["meta"]
+            for conn, key in (
+                (conn_infra_file, "infra_file"),
+                (conn_vehicle_file, "vehicle_file"),
+            ):
+                writer.write(
+                    conn,
+                    timestamp_ns,
+                    typestore.serialize_ros1(
+                        String(data=meta[key]), String.__msgtype__
+                    ),
+                )

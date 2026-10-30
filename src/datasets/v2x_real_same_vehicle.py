@@ -145,8 +145,11 @@ class V2XRealSameVehicle(Dataset):
         """
         (prev_dir, prev_ts), (curr_dir, curr_ts), is_first_frame = self.pairs[idx]
 
-        prev_pts = read_point_cloud(prev_dir / f"{prev_ts}.bin")
-        curr_pts = read_point_cloud(curr_dir / f"{curr_ts}.bin")
+        prev_file = prev_dir / f"{prev_ts}.bin"
+        curr_file = curr_dir / f"{curr_ts}.bin"
+
+        prev_pts = read_point_cloud(prev_file)
+        curr_pts = read_point_cloud(curr_file)
 
         prev_yaml = load_yaml(prev_dir / f"{prev_ts}.yaml")
         curr_yaml = load_yaml(curr_dir / f"{curr_ts}.yaml")
@@ -174,6 +177,9 @@ class V2XRealSameVehicle(Dataset):
                 "agent": prev_dir.name,
                 "prev_timestamp": prev_ts,
                 "curr_timestamp": curr_ts,
+                # Previous/current frames play the infra/vehicle roles
+                "infra_file": str(prev_file),
+                "vehicle_file": str(curr_file),
                 "is_first_frame": is_first_frame,
             },
         }

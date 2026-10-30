@@ -25,7 +25,7 @@ from tqdm import tqdm
 
 from metrics import Metric
 from registration import RegistrationMethod
-from utils.helpers import compute_overlap_ratio
+from utils.helpers import apply_transform, compute_overlap_ratio
 
 logger = logging.getLogger(__name__)
 
@@ -82,14 +82,30 @@ class ExperimentPipeline:
             accounted for the same way (own IMU-derived transform and
             `"first_frame": True`) instead of reusing the previous
             sample's registered transform.
-            May contain an `"order"` key (default 0), either 0 or 1. If
-            1, once two consecutive registered transforms are available
-            for the current first-frame chain, the initial guess that
-            would otherwise be the previous sample's registered
-            transform is instead an order-1 (constant-velocity)
+            May contain an `"order"` key (default 0), one of -2, -1, 0
+            or 1.
+            If 1, once two consecutive registered transforms are
+            available for the current first-frame chain, the initial
+            guess that would otherwise be the previous sample's
+            registered transform is instead an order-1 (constant-velocity)
             extrapolation from the previous two registered transforms.
             The chain of two transforms resets whenever a new first
-            frame is reached.
+            frame is reached. If -1 (requires `"use_previous"`), only
+            first frames are registered between infrastructure and
+            vehicle; every following sample instead registers the
+            previous sample's vehicle point cloud onto the current one
+            (identity initial guess), and the resulting relative
+            transform is composed with the previous registered
+            transform. If -2 (also requires `"use_previous"`), the same
+            composed transform is not used as the result but as the
+            initial guess of a full infrastructure-to-vehicle
+            registration, whose output is the result.
+
+        Raises
+        ------
+        ValueError
+            If `"order"` is not -2, -1, 0 or 1, or is -1 or -2 while
+            `"use_previous"` is False.
         """
         self.method = method
         self.dataset = dataset
@@ -99,7 +115,16 @@ class ExperimentPipeline:
         self.use_previous = config.get("use_previous", False)
         self.overlap = config.get("overlap", 0.0)
         self.order = config.get("order", 0)
+
+        if self.order not in (-2, -1, 0, 1):
+            raise ValueError(f"'order' must be -2, -1, 0 or 1, got {self.order}")
+        if self.order < 0 and not self.use_previous:
+            raise ValueError(
+                f"'order' {self.order} requires 'use_previous' to be True"
+            )
+
         self._previous_transform: np.ndarray | None = None
+        self._previous_vehicle_pts: np.ndarray | None = None
         self._transform_queue: deque[np.ndarray] = deque(maxlen=2)
         self._awaiting_first_frame: bool = True
 
@@ -210,6 +235,65 @@ class ExperimentPipeline:
 
         return self._previous_transform, False
 
+    def _register_sample(
+        self,
+        infra_pts: np.ndarray,
+        vehicle_pts: np.ndarray,
+        transform_imu: np.ndarray,
+        is_first_frame: bool,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Register a sample and update the chain state.
+
+        Parameters
+        ----------
+        infra_pts : np.ndarray
+            Infrastructure point cloud.
+        vehicle_pts : np.ndarray
+            Vehicle point cloud.
+        transform_imu : np.ndarray
+            Initial infra-to-vehicle guess, used for direct registration.
+        is_first_frame : bool
+            Whether this sample starts a chain. Only relevant when
+            `self.order` is negative.
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]
+            The registered infrastructure cloud and the 4x4 infra-to-vehicle
+            transform. When `self.order` is -1 and the sample is not a first
+            frame, the transform is the relative transform between the
+            previous and current vehicle clouds composed with the previous
+            transform. When it is -2, that composed transform is instead
+            the initial guess of an infra-to-vehicle registration, whose
+            output is returned.
+        """
+        if self.order < 0 and not is_first_frame:
+            # Source is the previous vehicle frame so that the result maps
+            # previous-vehicle coordinates onto current-vehicle ones.
+            _, relative_transform = self.method.register(
+                self._previous_vehicle_pts, vehicle_pts, transform_imu=np.eye(4)
+            )
+            transform = relative_transform @ self._previous_transform
+
+            if self.order == -1:
+                registered_cloud = apply_transform(infra_pts, transform)
+            else:
+                registered_cloud, transform = self.method.register(
+                    infra_pts, vehicle_pts, transform_imu=transform
+                )
+        else:
+            registered_cloud, transform = self.method.register(
+                infra_pts, vehicle_pts, transform_imu=transform_imu
+            )
+
+        self._previous_transform = transform
+        if self.order == 1:
+            self._transform_queue.append(transform)
+        elif self.order < 0:
+            self._previous_vehicle_pts = vehicle_pts
+
+        return registered_cloud, transform
+
     def evaluate_single(self, idx: int) -> dict[str, float]:
         """Register a single dataset sample and compute all metrics on it.
 
@@ -256,14 +340,10 @@ class ExperimentPipeline:
         )
 
         start_time = time.perf_counter()
-        registered_cloud, transform = self.method.register(
-            infra_pts, vehicle_pts, transform_imu=transform_imu
+        registered_cloud, transform = self._register_sample(
+            infra_pts, vehicle_pts, transform_imu, is_first_frame
         )
         runtime_ms = (time.perf_counter() - start_time) * 1000.0
-
-        self._previous_transform = transform
-        if self.order == 1:
-            self._transform_queue.append(transform)
 
         inputs = {
             "infra_pts": infra_pts,
@@ -316,6 +396,7 @@ class ExperimentPipeline:
             indices.
         """
         self._previous_transform = None
+        self._previous_vehicle_pts = None
         self._transform_queue.clear()
 
         single = isinstance(idx, int)
@@ -332,12 +413,15 @@ class ExperimentPipeline:
             infra_pts = sample["infra_pts"].numpy()
             vehicle_pts = sample["vehicle_pts"].numpy()
             transform_imu = self._resolve_transform_imu(sample)
-            _, transform = self.method.register(
-                infra_pts, vehicle_pts, transform_imu=transform_imu
+
+            # No overlap skipping here, so only a scene change (or the very
+            # first sample) starts a chain.
+            is_first_frame = (
+                self._previous_vehicle_pts is None or sample["meta"]["is_first_frame"]
             )
-            self._previous_transform = transform
-            if self.order == 1:
-                self._transform_queue.append(transform)
+            _, transform = self._register_sample(
+                infra_pts, vehicle_pts, transform_imu, is_first_frame
+            )
             transforms.append(transform)
 
         if save_transform:
@@ -367,6 +451,7 @@ class ExperimentPipeline:
         logger.info("Starting evaluation over %d samples", len(self.dataset))
         checkpoint_every = self.config.get("checkpoint_every", 10)
         self._previous_transform = None
+        self._previous_vehicle_pts = None
         self._transform_queue.clear()
         self._awaiting_first_frame = True
 

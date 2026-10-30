@@ -248,7 +248,8 @@ class V2XReal(Dataset):
             raw point clouds. ``T_vehicle_to_infra`` / ``T_infra_to_vehicle``
             : (4, 4) float32 tensors with the rigid transforms between the
             two LiDAR frames. ``meta`` : dict with scenario, timestamps,
-            agent ids and an ``is_first_frame`` flag.
+            agent ids, the full ``infra_file`` / ``vehicle_file`` paths
+            and an ``is_first_frame`` flag.
         """
         (infra_dir, infra_ts), (vehicle_dir, vehicle_ts) = self.pairs[idx]
 
@@ -283,6 +284,8 @@ class V2XReal(Dataset):
                 "vehicle_timestamp": vehicle_ts,
                 "infra_agent": infra_dir.name,
                 "vehicle_agent": vehicle_dir.name,
+                "infra_file": str(infra_dir / f"{infra_ts}.bin"),
+                "vehicle_file": str(vehicle_dir / f"{vehicle_ts}.bin"),
                 # A new agent pair always restarts numbering at 000000, so
                 # this literal check also detects "new scene" transitions.
                 "is_first_frame": infra_ts == "000000" and vehicle_ts == "000000",

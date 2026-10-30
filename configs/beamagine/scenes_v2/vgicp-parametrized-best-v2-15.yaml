@@ -1,0 +1,30 @@
+output_path: experiments/vgicp-128-best-methods-v2
+transforms_path: /mnt/work/users/aleix.armero/transforms/vgicp-best-v2-15.npy
+overlap_threshold: 1.0
+checkpoint_every : 100
+use_previous: true
+order : -1
+
+registration_method:
+  name: vgicp-param
+  params: {
+    voxel_size : 0.2,
+    voxel_resolution : 1.2,
+    max_correspondence_distance : 1,
+    num_threads : 4,
+    use_initialization: true
+    }          # forwarded as **kwargs to load_method
+
+dataset:
+  name: beamagine_v2
+  params:            # forwarded as **kwargs to load_dataset
+    root_dir : /mnt/work/users/josep/CROWDSOURCED_EWOC_20260930
+    json_folder: v1.0
+    scene_number: 15
+    
+metrics:
+  - name: point_based
+    params: {
+      rte_threshold : 0.2,
+      rre_threshold : 0.2
+    }

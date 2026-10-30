@@ -195,12 +195,11 @@ class Beamagine(Dataset):
         """
         car_sample, infra_sample = self.sample_pairs[idx]
 
-        car_pts = read_point_cloud(
-            self.root_dir / LIDAR_SUBDIR / car_sample["filename"]
-        )
-        infra_pts = read_point_cloud(
-            self.root_dir / LIDAR_SUBDIR / infra_sample["filename"]
-        )
+        car_file = self.root_dir / LIDAR_SUBDIR / car_sample["filename"]
+        infra_file = self.root_dir / LIDAR_SUBDIR / infra_sample["filename"]
+
+        car_pts = read_point_cloud(car_file)
+        infra_pts = read_point_cloud(infra_file)
 
         return {
             "vehicle_pts": torch.from_numpy(car_pts[:, :3]),
@@ -218,6 +217,8 @@ class Beamagine(Dataset):
                 infra_sample["T_fixed_to_car"]
             ).float(),
             "meta": {
+                "infra_file": str(infra_file),
+                "vehicle_file": str(car_file),
                 "is_first_frame": idx == 0,
             },
         }
